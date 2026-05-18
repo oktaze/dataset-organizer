@@ -1,7 +1,7 @@
 [package]
 name = "lora-organizer"
 version = "0.1.0"
-description = "A Tauri App"
+description = "Organize image datasets for training Stable Diffusion / Illustrious XL LoRAs — local auto-tagging, character costume system, dataset export."
 authors = ["you"]
 edition = "2021"
 
