@@ -60,6 +60,14 @@ export interface CaptionBuildInput {
   constant_tags: string[];
   costume_tags?: string[];
   costume_trigger?: string;
+  prepend_tags?: string[];
+  append_tags?: string[];
+}
+
+export interface TagOptions {
+  threshold?: number;
+  maxTags?: number;
+  blacklist?: string[];
 }
 
 export const sidecar = {
@@ -78,16 +86,20 @@ export const sidecar = {
   startModelDownload: () =>
     post<ModelStatus>("/model/download", {}),
 
-  tagOne: (imagePath: string, threshold?: number) =>
+  tagOne: (imagePath: string, opts?: TagOptions) =>
     post<{ tags: TagScore[] }>("/tag", {
       image_path: imagePath,
-      threshold,
+      threshold: opts?.threshold,
+      max_tags: opts?.maxTags,
+      blacklist: opts?.blacklist,
     }),
 
-  tagBatch: (imagePaths: string[], threshold?: number) =>
+  tagBatch: (imagePaths: string[], opts?: TagOptions) =>
     post<{ results: TagBatchResult[] }>("/tag/batch", {
       image_paths: imagePaths,
-      threshold,
+      threshold: opts?.threshold,
+      max_tags: opts?.maxTags,
+      blacklist: opts?.blacklist,
     }),
 
   matchCostume: (

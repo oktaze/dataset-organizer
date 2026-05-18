@@ -9,12 +9,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Select } from "@/components/ui/select";
+import { Loader2, Tags } from "lucide-react";
 import { useImages } from "@/hooks/use-images";
 import { useReprocess } from "@/hooks/use-reprocess";
 import {
   useSettingsStore,
   DEFAULT_THRESHOLD,
+  DEFAULT_MAX_TAGS,
+  DEFAULT_EXISTING_POLICY,
+  type ExistingPolicy,
 } from "@/stores/use-settings-store";
 import type { Project } from "@/lib/types";
 
@@ -36,6 +40,20 @@ export function ReprocessDialog({
     (s) => s.thresholds[project.id] ?? DEFAULT_THRESHOLD,
   );
   const setThreshold = useSettingsStore((s) => s.setThreshold);
+  const maxTags = useSettingsStore(
+    (s) => s.maxTags[project.id] ?? DEFAULT_MAX_TAGS,
+  );
+  const setMaxTags = useSettingsStore((s) => s.setMaxTags);
+  const blacklist = useSettingsStore((s) => s.blacklist[project.id] ?? "");
+  const setBlacklist = useSettingsStore((s) => s.setBlacklist);
+  const prependTags = useSettingsStore((s) => s.prependTags[project.id] ?? "");
+  const setPrependTags = useSettingsStore((s) => s.setPrependTags);
+  const appendTags = useSettingsStore((s) => s.appendTags[project.id] ?? "");
+  const setAppendTags = useSettingsStore((s) => s.setAppendTags);
+  const existingPolicy = useSettingsStore(
+    (s) => s.existingPolicy[project.id] ?? DEFAULT_EXISTING_POLICY,
+  );
+  const setExistingPolicy = useSettingsStore((s) => s.setExistingPolicy);
   const claudeVision = useSettingsStore(
     (s) => s.claudeVision[project.id] ?? false,
   );
@@ -45,11 +63,11 @@ export function ReprocessDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Reprocess images</DialogTitle>
+          <DialogTitle>Tag images</DialogTitle>
           <DialogDescription>
-            Re-runs WD Tagger, costume matching and caption building on every
-            image in <strong>{project.name}</strong>. Use this after editing
-            costumes, constant tags, or the threshold below.
+            Runs WD Tagger, costume matching and caption building on the
+            images in <strong>{project.name}</strong>. Images that already
+            have tags are handled per the policy below.
           </DialogDescription>
         </DialogHeader>
 
@@ -78,6 +96,91 @@ export function ReprocessDialog({
             </p>
           </div>
 
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="rp-maxtags">Max tags</Label>
+            <Input
+              id="rp-maxtags"
+              type="number"
+              min={0}
+              step={1}
+              value={maxTags}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                setMaxTags(project.id, Number.isNaN(v) ? 0 : Math.max(0, v));
+              }}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Keep only the N highest-confidence tags. 0 = no limit.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="rp-blacklist">Blacklist</Label>
+            <Input
+              id="rp-blacklist"
+              type="text"
+              placeholder="1girl, solo, simple_background"
+              value={blacklist}
+              onChange={(e) => setBlacklist(project.id, e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Comma-separated, case-insensitive. Removed from tags & caption.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="rp-prepend">Prepend tags</Label>
+            <Input
+              id="rp-prepend"
+              type="text"
+              placeholder="masterpiece, best quality"
+              value={prependTags}
+              onChange={(e) => setPrependTags(project.id, e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Comma-separated. Inserted just before the auto tags in every
+              caption.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="rp-append">Append tags</Label>
+            <Input
+              id="rp-append"
+              type="text"
+              placeholder="lowres, watermark"
+              value={appendTags}
+              onChange={(e) => setAppendTags(project.id, e.target.value)}
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Comma-separated. Added at the very end of every caption.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="rp-policy">If tags already exist</Label>
+            <Select
+              id="rp-policy"
+              value={existingPolicy}
+              onChange={(e) =>
+                setExistingPolicy(
+                  project.id,
+                  e.target.value as ExistingPolicy,
+                )
+              }
+            >
+              <option value="ignore">
+                Ignore — skip already-tagged images
+              </option>
+              <option value="append">
+                Append — merge new tags into existing
+              </option>
+              <option value="overwrite">
+                Overwrite — replace tags & caption
+              </option>
+            </Select>
+          </div>
+
           {project.type === "character" && (
             <label className="flex items-start gap-2 text-xs text-foreground">
               <input
@@ -99,11 +202,24 @@ export function ReprocessDialog({
             </label>
           )}
 
-          <p className="rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-400">
-            Overwrites auto tags & captions for all {images.length} image
-            {images.length === 1 ? "" : "s"} — manual tag/caption edits and
-            validation status are reset.
-          </p>
+          {existingPolicy === "overwrite" ? (
+            <p className="rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-400">
+              Overwrites auto tags & captions for every already-tagged image
+              of the {images.length} in this project — manual tag/caption
+              edits and validation status are reset.
+            </p>
+          ) : existingPolicy === "append" ? (
+            <p className="rounded-md bg-muted px-2 py-1.5 text-[11px] text-muted-foreground">
+              Merges newly detected tags into already-tagged images; existing
+              tags and manual edits are kept. Untagged images are tagged
+              normally.
+            </p>
+          ) : (
+            <p className="rounded-md bg-muted px-2 py-1.5 text-[11px] text-muted-foreground">
+              Only untagged images are processed — already-tagged images are
+              left untouched.
+            </p>
+          )}
 
           {progress && (
             <div>
@@ -148,9 +264,9 @@ export function ReprocessDialog({
             {running ? (
               <Loader2 className="size-3.5 animate-spin" />
             ) : (
-              <RefreshCw className="size-3.5" />
+              <Tags className="size-3.5" />
             )}
-            Re-run pipeline
+            Tag images
           </Button>
         </DialogFooter>
       </DialogContent>

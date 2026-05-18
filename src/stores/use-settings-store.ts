@@ -3,6 +3,12 @@ import { persist } from "zustand/middleware";
 
 export const DEFAULT_THRESHOLD = 0.35;
 export const DEFAULT_CLAUDE_MODEL = "claude-opus-4-7";
+/** Max number of auto tags kept per image. 0 = no limit. */
+export const DEFAULT_MAX_TAGS = 0;
+
+/** What to do when an image already has tags at tagging time. */
+export type ExistingPolicy = "ignore" | "append" | "overwrite";
+export const DEFAULT_EXISTING_POLICY: ExistingPolicy = "ignore";
 
 export const CLAUDE_MODELS = [
   { id: "claude-opus-4-7", label: "Opus 4.7 — best, priciest (~$0.009/img)" },
@@ -13,6 +19,16 @@ export const CLAUDE_MODELS = [
 interface SettingsState {
   /** WD Tagger confidence threshold, per project id. */
   thresholds: Record<string, number>;
+  /** Max number of auto tags kept (0 = no limit), per project id. */
+  maxTags: Record<string, number>;
+  /** Excluded tags, raw comma-separated string, per project id. */
+  blacklist: Record<string, string>;
+  /** Tags forced before auto tags, raw comma-separated, per project id. */
+  prependTags: Record<string, string>;
+  /** Tags forced after auto tags, raw comma-separated, per project id. */
+  appendTags: Record<string, string>;
+  /** What to do when an image already has tags, per project id. */
+  existingPolicy: Record<string, ExistingPolicy>;
   /** Use Claude Vision for costume matching, per project id. */
   claudeVision: Record<string, boolean>;
   /** App-wide Anthropic API key (stored locally, plaintext). */
@@ -22,6 +38,11 @@ interface SettingsState {
   /** First-launch WD model download prompt already shown. */
   modelPromptSeen: boolean;
   setThreshold: (projectId: string, value: number) => void;
+  setMaxTags: (projectId: string, value: number) => void;
+  setBlacklist: (projectId: string, value: string) => void;
+  setPrependTags: (projectId: string, value: string) => void;
+  setAppendTags: (projectId: string, value: string) => void;
+  setExistingPolicy: (projectId: string, value: ExistingPolicy) => void;
   setClaudeVision: (projectId: string, value: boolean) => void;
   setAnthropicApiKey: (key: string) => void;
   setClaudeModel: (model: string) => void;
@@ -32,6 +53,11 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       thresholds: {},
+      maxTags: {},
+      blacklist: {},
+      prependTags: {},
+      appendTags: {},
+      existingPolicy: {},
       claudeVision: {},
       anthropicApiKey: "",
       claudeModel: DEFAULT_CLAUDE_MODEL,
@@ -39,6 +65,26 @@ export const useSettingsStore = create<SettingsState>()(
       setThreshold: (projectId, value) =>
         set((s) => ({
           thresholds: { ...s.thresholds, [projectId]: value },
+        })),
+      setMaxTags: (projectId, value) =>
+        set((s) => ({
+          maxTags: { ...s.maxTags, [projectId]: value },
+        })),
+      setBlacklist: (projectId, value) =>
+        set((s) => ({
+          blacklist: { ...s.blacklist, [projectId]: value },
+        })),
+      setPrependTags: (projectId, value) =>
+        set((s) => ({
+          prependTags: { ...s.prependTags, [projectId]: value },
+        })),
+      setAppendTags: (projectId, value) =>
+        set((s) => ({
+          appendTags: { ...s.appendTags, [projectId]: value },
+        })),
+      setExistingPolicy: (projectId, value) =>
+        set((s) => ({
+          existingPolicy: { ...s.existingPolicy, [projectId]: value },
         })),
       setClaudeVision: (projectId, value) =>
         set((s) => ({
@@ -55,6 +101,36 @@ export const useSettingsStore = create<SettingsState>()(
 /** Non-React accessors for the pipeline / hooks. */
 export function getThreshold(projectId: string): number {
   return useSettingsStore.getState().thresholds[projectId] ?? DEFAULT_THRESHOLD;
+}
+
+export function getMaxTags(projectId: string): number {
+  return useSettingsStore.getState().maxTags[projectId] ?? DEFAULT_MAX_TAGS;
+}
+
+function parseCsv(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export function getBlacklist(projectId: string): string[] {
+  return parseCsv(useSettingsStore.getState().blacklist[projectId] ?? "");
+}
+
+export function getPrependTags(projectId: string): string[] {
+  return parseCsv(useSettingsStore.getState().prependTags[projectId] ?? "");
+}
+
+export function getAppendTags(projectId: string): string[] {
+  return parseCsv(useSettingsStore.getState().appendTags[projectId] ?? "");
+}
+
+export function getExistingPolicy(projectId: string): ExistingPolicy {
+  return (
+    useSettingsStore.getState().existingPolicy[projectId] ??
+    DEFAULT_EXISTING_POLICY
+  );
 }
 
 export function getClaudeVision(projectId: string): boolean {

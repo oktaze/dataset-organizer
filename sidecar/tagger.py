@@ -162,7 +162,12 @@ def _preprocess(path: str) -> np.ndarray:
     return np.expand_dims(arr, axis=0)
 
 
-def tag_image(path: str, threshold: Optional[float] = None) -> list[dict]:
+def tag_image(
+    path: str,
+    threshold: Optional[float] = None,
+    max_tags: Optional[int] = None,
+    blacklist: Optional[list[str]] = None,
+) -> list[dict]:
     _ensure_loaded()
     assert _session is not None
     th = WD_THRESHOLD if threshold is None else threshold
@@ -171,8 +176,23 @@ def tag_image(path: str, threshold: Optional[float] = None) -> list[dict]:
     input_name = _session.get_inputs()[0].name
     probs = _session.run(None, {input_name: x})[0][0]
 
-    return [
+    result = [
         {"tag": _tag_names[i], "score": float(p)}
         for i, p in enumerate(probs)
         if i < len(_tag_names) and p >= th
     ]
+
+    # Drop blacklisted tags (case-insensitive) before capping so a
+    # high-score blacklisted tag doesn't consume a max_tags slot.
+    bl = {t.strip().lower() for t in (blacklist or []) if t.strip()}
+    if bl:
+        result = [t for t in result if t["tag"].strip().lower() not in bl]
+
+    # ONNX output is in label-index order, not score order — sort so the
+    # most confident tags survive the cap (and lead the caption).
+    result.sort(key=lambda t: t["score"], reverse=True)
+
+    if max_tags and max_tags > 0:
+        result = result[:max_tags]
+
+    return result

@@ -1,9 +1,10 @@
 """Caption assembly.
 
-Order (per CLAUDE.md): trigger, costume_trigger?, costume_tags, then the
-remaining contextual auto tags. Character constant tags are excluded so the
-LoRA learns them implicitly. Costume canonical tags are always kept (forced)
-even if they collide with a constant — costume consistency wins.
+Order (per CLAUDE.md): trigger, costume_trigger?, costume_tags, prepend_tags,
+then the remaining contextual auto tags, then append_tags. Character constant
+tags are excluded so the LoRA learns them implicitly. Costume canonical tags
+and user prepend/append tags are always kept (forced) even if they collide
+with a constant — costume consistency / explicit intent wins.
 """
 
 from __future__ import annotations
@@ -17,8 +18,12 @@ def build_caption(
     constant_tags: list[str],
     costume_tags: Optional[list[str]] = None,
     costume_trigger: Optional[str] = None,
+    prepend_tags: Optional[list[str]] = None,
+    append_tags: Optional[list[str]] = None,
 ) -> str:
     costume_tags = costume_tags or []
+    prepend_tags = prepend_tags or []
+    append_tags = append_tags or []
     constants = {t.strip() for t in constant_tags if t.strip()}
 
     parts: list[str] = []
@@ -39,7 +44,13 @@ def build_caption(
         add(costume_trigger, force=True)
     for t in costume_tags:
         add(t, force=True)
+    # User-requested tags: forced (not filtered by constants), deduped by
+    # `seen`. Prepend sits right after the canonical tags, append at the end.
+    for t in prepend_tags:
+        add(t, force=True)
     for t in auto_tags:
         add(t, force=False)
+    for t in append_tags:
+        add(t, force=True)
 
     return ", ".join(parts)

@@ -10,11 +10,17 @@ import {
 } from "@/lib/db";
 import {
   getThreshold,
+  getMaxTags,
+  getBlacklist,
+  getPrependTags,
+  getAppendTags,
+  getExistingPolicy,
   getClaudeVision,
   getAnthropicApiKey,
   getClaudeModel,
+  type ExistingPolicy,
 } from "@/stores/use-settings-store";
-import type { Costume, ImageItem, Project } from "@/lib/types";
+import type { Costume, ImageItem, Project, TagScore } from "@/lib/types";
 
 export interface PipelineCtx {
   project: Project;
@@ -26,6 +32,11 @@ export interface PipelineCtx {
   /** Style/Concept: forced tags added to every caption (non-character). */
   projectTags: string[];
   threshold: number;
+  maxTags: number;
+  blacklist: string[];
+  prependTags: string[];
+  appendTags: string[];
+  existingPolicy: ExistingPolicy;
   useClaude: boolean;
   apiKey: string;
   model: string;
@@ -52,19 +63,69 @@ export async function makePipelineCtx(project: Project): Promise<PipelineCtx> {
     constants,
     projectTags,
     threshold: getThreshold(project.id),
+    maxTags: getMaxTags(project.id),
+    blacklist: getBlacklist(project.id),
+    prependTags: getPrependTags(project.id),
+    appendTags: getAppendTags(project.id),
+    existingPolicy: getExistingPolicy(project.id),
     useClaude: getClaudeVision(project.id),
     apiKey: getAnthropicApiKey(),
     model: getClaudeModel(),
   };
 }
 
-/** Run the full pipeline for one image and return the DB patch. */
+const ciKey = (s: string): string => s.trim().toLowerCase();
+
+/** Case-insensitive de-dup of tag names, first occurrence wins. */
+function dedupeNames(names: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const n of names) {
+    const k = ciKey(n);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(n);
+  }
+  return out;
+}
+
+/** Union of TagScore lists; existing entries win on collision. */
+function unionTagScores(existing: TagScore[], fresh: TagScore[]): TagScore[] {
+  const seen = new Set(existing.map((t) => ciKey(t.tag)));
+  const out = [...existing];
+  for (const t of fresh) {
+    const k = ciKey(t.tag);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(t);
+  }
+  return out;
+}
+
+/** Run the full pipeline for one image and return the DB patch.
+ *  Returns an empty patch (no-op for imagesDb.update) when the image is
+ *  skipped under the "ignore" existing-tags policy. */
 export async function processImage(
   img: ImageItem,
   ctx: PipelineCtx,
 ): Promise<ImagePatch> {
-  const { tags } = await sidecar.tagOne(img.filepath, ctx.threshold);
-  const autoNames = tags.map((t) => t.tag);
+  const hasTags = img.status !== "pending" || img.tagsFinal.length > 0;
+
+  // "ignore": leave already-tagged images untouched.
+  if (ctx.existingPolicy === "ignore" && hasTags) return {};
+
+  const { tags } = await sidecar.tagOne(img.filepath, {
+    threshold: ctx.threshold,
+    maxTags: ctx.maxTags,
+    blacklist: ctx.blacklist,
+  });
+
+  // "append": merge fresh tags into the existing set (case-insensitive).
+  const isAppend = ctx.existingPolicy === "append" && hasTags;
+  const finalAuto = isAppend ? unionTagScores(img.tagsAuto, tags) : tags;
+  const autoNames = isAppend
+    ? dedupeNames([...img.tagsFinal, ...tags.map((t) => t.tag)])
+    : tags.map((t) => t.tag);
 
   let costumeId: string | null = null;
   let costumeScore: Record<string, number> = {};
@@ -101,10 +162,12 @@ export async function processImage(
     constant_tags: ctx.constants,
     costume_tags: costumeTags,
     costume_trigger: costumeTrigger,
+    prepend_tags: ctx.prependTags,
+    append_tags: ctx.appendTags,
   });
 
   return {
-    tagsAuto: tags,
+    tagsAuto: finalAuto,
     tagsFinal: autoNames,
     costumeId,
     costumeScore,

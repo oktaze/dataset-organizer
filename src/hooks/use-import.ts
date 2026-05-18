@@ -2,10 +2,8 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { open } from "@tauri-apps/plugin-dialog";
 import { tauri } from "@/lib/tauri";
-import { sidecar } from "@/lib/sidecar";
 import { imagesDb } from "@/lib/db";
-import { makePipelineCtx, processImage } from "@/lib/pipeline";
-import type { ImageItem, Project } from "@/lib/types";
+import type { Project } from "@/lib/types";
 
 export interface ImportProgress {
   phase: string;
@@ -14,9 +12,9 @@ export interface ImportProgress {
 }
 
 /**
- * Folder import pipeline (CLAUDE.md "Flux principal"), processed
- * **one image at a time** so progress is visible and the UI stays
- * responsive even while the WD model downloads on first run.
+ * Folder import: scans the folder, de-dups against already-imported
+ * paths and inserts new images as "pending". Tagging is **not** run
+ * here — the user launches it explicitly from the "Tag images" dialog.
  */
 export function useImport() {
   const qc = useQueryClient();
@@ -49,55 +47,19 @@ export function useImport() {
       }
 
       setProgress({ phase: "Adding images", done: 0, total: fresh.length });
-      const inserted: ImageItem[] = [];
       for (const m of fresh) {
-        inserted.push(
-          await imagesDb.insert({
-            projectId: project.id,
-            filename: m.filename,
-            filepath: m.filepath,
-            width: m.width,
-            height: m.height,
-          }),
-        );
+        await imagesDb.insert({
+          projectId: project.id,
+          filename: m.filename,
+          filepath: m.filepath,
+          width: m.width,
+          height: m.height,
+        });
         setProgress((p) => p && { ...p, done: p.done + 1 });
       }
       invalidate();
-
-      const ctx = await makePipelineCtx(project);
-
-      // First /tag call lazily downloads the ~400 MB model — tell the user.
-      const health = await sidecar.health().catch(() => null);
-      const modelPreloaded = health?.model_loaded === true;
-      setProgress({
-        phase: modelPreloaded
-          ? "Tagging & captioning"
-          : "Loading WD Tagger model (first run, ~400 MB — this can take several minutes)",
-        done: 0,
-        total: fresh.length,
-      });
-
-      let failed = 0;
-      for (let i = 0; i < inserted.length; i++) {
-        const img = inserted[i];
-        try {
-          const patch = await processImage(img, ctx);
-          if (i === 0 && !modelPreloaded) {
-            setProgress((p) => p && { ...p, phase: "Tagging & captioning" });
-          }
-          await imagesDb.update(img.id, patch);
-        } catch (e) {
-          failed++;
-          console.error(`tagging failed for ${img.filename}:`, e);
-        }
-        setProgress((p) => p && { ...p, done: p.done + 1 });
-        if ((i + 1) % 8 === 0) invalidate();
-      }
-
-      invalidate();
-      if (failed > 0) {
-        setError(`${failed} image(s) could not be tagged (see console).`);
-      }
+      // Tagging is no longer automatic — the user runs it from the
+      // "Tag images" dialog (see useReprocess).
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {

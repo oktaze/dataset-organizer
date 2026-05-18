@@ -25,7 +25,7 @@ import claude_vision
 import costume_matcher
 import tagger
 
-app = FastAPI(title="LoRA Organizer Sidecar", version="0.1.0")
+app = FastAPI(title="LoRA Organizer Sidecar", version="0.2.0")
 
 # The Tauri webview (http://localhost:1420 in dev, tauri://localhost in prod)
 # is a different origin than this 127.0.0.1 sidecar. Allow all origins —
@@ -51,6 +51,8 @@ class TagItem(BaseModel):
 class TagRequest(BaseModel):
     image_path: str
     threshold: Optional[float] = None
+    max_tags: Optional[int] = None
+    blacklist: Optional[list[str]] = None
 
 
 class TagResponse(BaseModel):
@@ -60,6 +62,8 @@ class TagResponse(BaseModel):
 class TagBatchRequest(BaseModel):
     image_paths: list[str]
     threshold: Optional[float] = None
+    max_tags: Optional[int] = None
+    blacklist: Optional[list[str]] = None
 
 
 class TagBatchResultItem(BaseModel):
@@ -79,14 +83,21 @@ def health() -> HealthResponse:
 
 @app.post("/tag", response_model=TagResponse)
 def tag(req: TagRequest) -> TagResponse:
-    tags = tagger.tag_image(req.image_path, req.threshold)
+    tags = tagger.tag_image(
+        req.image_path, req.threshold, req.max_tags, req.blacklist
+    )
     return TagResponse(tags=tags)
 
 
 @app.post("/tag/batch", response_model=TagBatchResponse)
 def tag_batch(req: TagBatchRequest) -> TagBatchResponse:
     results = [
-        TagBatchResultItem(path=p, tags=tagger.tag_image(p, req.threshold))
+        TagBatchResultItem(
+            path=p,
+            tags=tagger.tag_image(
+                p, req.threshold, req.max_tags, req.blacklist
+            ),
+        )
         for p in req.image_paths
     ]
     return TagBatchResponse(results=results)
@@ -120,6 +131,8 @@ class CaptionBuildRequest(BaseModel):
     constant_tags: list[str] = []
     costume_tags: Optional[list[str]] = None
     costume_trigger: Optional[str] = None
+    prepend_tags: Optional[list[str]] = None
+    append_tags: Optional[list[str]] = None
 
 
 class CaptionBuildResponse(BaseModel):
@@ -154,6 +167,8 @@ def caption_build(req: CaptionBuildRequest) -> CaptionBuildResponse:
         constant_tags=req.constant_tags,
         costume_tags=req.costume_tags,
         costume_trigger=req.costume_trigger,
+        prepend_tags=req.prepend_tags,
+        append_tags=req.append_tags,
     )
     return CaptionBuildResponse(caption=text)
 

@@ -12,9 +12,11 @@ export interface ReprocessProgress {
 }
 
 /**
- * Re-run the full pipeline (WD Tagger -> costume match -> caption) on
- * already-imported images, e.g. after editing costumes, constant tags
- * or the WD threshold. Overwrites auto tags & captions.
+ * Run the full pipeline (WD Tagger -> costume match -> caption) on
+ * imported images. This is the single tagging entry point (initial
+ * tagging after import *and* re-tagging). The existing-tags policy
+ * (ignore / append / overwrite) decides what happens to images that
+ * already have tags.
  */
 export function useReprocess() {
   const qc = useQueryClient();
@@ -41,35 +43,42 @@ export function useReprocess() {
       const modelPreloaded = health?.model_loaded === true;
       setProgress({
         phase: modelPreloaded
-          ? "Re-tagging & captioning"
+          ? "Tagging & captioning"
           : "Loading WD Tagger model (first run, ~400 MB)",
         done: 0,
         total: images.length,
       });
 
       let failed = 0;
+      let skipped = 0;
       for (let i = 0; i < images.length; i++) {
         const img = images[i];
         try {
           const patch = await processImage(img, ctx);
           if (i === 0 && !modelPreloaded) {
-            setProgress((p) => p && { ...p, phase: "Re-tagging & captioning" });
+            setProgress((p) => p && { ...p, phase: "Tagging & captioning" });
           }
-          await imagesDb.update(img.id, patch);
+          // Empty patch = skipped under the "ignore" policy.
+          if (Object.keys(patch).length === 0) {
+            skipped++;
+          } else {
+            await imagesDb.update(img.id, patch);
+          }
         } catch (e) {
           failed++;
-          console.error(`reprocess failed for ${img.filename}:`, e);
+          console.error(`tagging failed for ${img.filename}:`, e);
         }
         setProgress((p) => p && { ...p, done: p.done + 1 });
         if ((i + 1) % 8 === 0) invalidate();
       }
 
       invalidate();
-      const ok = images.length - failed;
+      const tagged = images.length - failed - skipped;
       setResult(
-        `Reprocessed ${ok} image${ok === 1 ? "" : "s"}${
-          failed ? `, ${failed} failed (see console)` : ""
-        }.`,
+        `Tagged ${tagged} image${tagged === 1 ? "" : "s"}` +
+          (skipped ? `, ${skipped} skipped (already tagged)` : "") +
+          (failed ? `, ${failed} failed (see console)` : "") +
+          ".",
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

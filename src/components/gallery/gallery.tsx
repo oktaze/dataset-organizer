@@ -4,7 +4,7 @@ import {
   FolderOpen,
   Loader2,
   Download,
-  RefreshCw,
+  Tags,
   Check,
   Trash2,
   X,
@@ -143,8 +143,8 @@ export function Gallery({ project }: GalleryProps) {
           onClick={() => setReprocessOpen(true)}
           disabled={images.length === 0 || running}
         >
-          <RefreshCw className="size-3.5" />
-          Reprocess
+          <Tags className="size-3.5" />
+          Tag images
         </Button>
         <Button
           variant="outline"
