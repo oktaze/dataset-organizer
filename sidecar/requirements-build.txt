@@ -1,0 +1,7 @@
+# Build-only (not needed at runtime). Install into the sidecar venv to
+# produce the frozen binary:  sidecar/.venv/bin/pip install -r sidecar/requirements-build.txt
+pyinstaller==6.11.1
+# `patchelf` is required by linuxdeploy when bundling the Linux AppImage.
+# This PyPI wheel ships a working binary, so no `sudo apt install patchelf`
+# is needed; the tauri wrapper puts the venv's bin dir on PATH.
+patchelf==0.17.2
