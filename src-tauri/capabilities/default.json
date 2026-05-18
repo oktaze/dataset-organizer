@@ -21,6 +21,8 @@
       "allow": [{ "path": "**" }]
     },
     "fs:allow-exists",
-    "fs:allow-stat"
+    "fs:allow-stat",
+    "updater:default",
+    "process:allow-restart"
   ]
 }

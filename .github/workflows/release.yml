@@ -1,0 +1,79 @@
+name: release
+
+# Push a version tag (e.g. v0.1.1) to build, sign, and publish a GitHub
+# Release with per-platform installers + the updater artifacts and
+# latest.json that `tauri-plugin-updater` polls. Bump `version` in
+# tauri.conf.json + package.json + Cargo.toml before tagging.
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    permissions:
+      contents: write # create the GitHub Release + upload assets
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04 # Linux AppImage (older glibc = wider compat)
+          - platform: macos-14 # Apple Silicon (arm64)
+          - platform: macos-13 # Intel (x86_64)
+          - platform: windows-latest # Windows NSIS
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev librsvg2-dev patchelf build-essential \
+            curl wget file libssl-dev libgtk-3-dev \
+            libayatana-appindicator3-dev
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12" # cp312 wheels required for onnxruntime/numpy/pillow
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build Python sidecar venv
+        shell: bash
+        run: |
+          python -m venv sidecar/.venv
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            PY=sidecar/.venv/Scripts/python
+          else
+            PY=sidecar/.venv/bin/python
+          fi
+          "$PY" -m pip install --upgrade pip
+          "$PY" -m pip install -r sidecar/requirements.txt -r sidecar/requirements-build.txt
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # tauri-action calls the Tauri CLI directly (not scripts/tauri.mjs),
+          # so set the AppImage FUSE workaround here too.
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "lora-organizer ${{ github.ref_name }}"
+          releaseBody: "Auto-update enabled. Each update re-downloads the full app bundle (incl. the ~63 MB Python sidecar); the WD Tagger model is unaffected. macOS builds are unsigned — on first manual install, right-click → Open."
+          releaseDraft: false
+          prerelease: false

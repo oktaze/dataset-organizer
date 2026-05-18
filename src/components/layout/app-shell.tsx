@@ -9,7 +9,9 @@ import { useImages, useUpdateImage } from "@/hooks/use-images";
 import { useCostumes } from "@/hooks/use-costumes";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useModelDownload } from "@/hooks/use-model-download";
+import { useAppUpdater } from "@/hooks/use-app-updater";
 import { ModelDownloadPrompt } from "@/components/model/model-download-prompt";
+import { UpdateBanner } from "@/components/updates/update-banner";
 import { useProjectStore } from "@/stores/use-project-store";
 import { useUiStore } from "@/stores/use-ui-store";
 import { formatBytes, formatDuration } from "@/lib/format";
@@ -25,6 +27,7 @@ export function AppShell() {
   const { status, modelLoaded } = useSidecar();
   const meta = STATUS_META[status];
   const model = useModelDownload();
+  useAppUpdater();
 
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const { data: projects = [] } = useProjects();
@@ -160,6 +163,7 @@ export function AppShell() {
       </footer>
 
       <ModelDownloadPrompt />
+      <UpdateBanner />
     </div>
   );
 }
