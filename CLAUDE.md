@@ -275,6 +275,36 @@ WD_THRESHOLD=0.35               # seuil de confiance minimum
 
 ---
 
+## Auto-update & Releases
+
+- Updater intégré : `tauri-plugin-updater` + `tauri-plugin-process`, UX type VS Code (check au démarrage → download silencieux → bannière « Restart »). Hook `src/hooks/use-app-updater.ts` + store `src/stores/use-updater-store.ts` + `src/components/updates/update-banner.tsx`, monté une fois dans `AppShell`. Check manuel dans Settings.
+- Endpoint : `plugins.updater.endpoints` → `https://github.com/oktaze/lora-organizer/releases/latest/download/latest.json`. `bundle.createUpdaterArtifacts: true` ⇒ **chaque `pnpm tauri build` doit être signé**.
+- Clé minisign **hors repo** : `~/.tauri/lora-organizer-updater.key` (sans mot de passe). Pubkey committée dans `tauri.conf.json`. Secret CI : `TAURI_SIGNING_PRIVATE_KEY`. **Perte de la clé = plus aucun client ne peut s'updater.**
+- `scripts/tauri.mjs` auto-charge cette clé si `TAURI_SIGNING_PRIVATE_KEY` n'est pas déjà posée ⇒ `pnpm tauri build` signe sans manip.
+- CI : `.github/workflows/release.yml`, déclenchée sur tag `v*`. Matrice Linux / Windows / macOS arm64 / macOS Intel. `tauri-action` build, signe, publie la Release + `latest.json`.
+- Flux release : bump `version` dans `src-tauri/tauri.conf.json` **+** `package.json` **+** `src-tauri/Cargo.toml` → `git tag vX.Y.Z` → push tags. L'updater compare à `latest.json` ⇒ **toujours bumper**.
+- Première release = install **manuelle** (l'updater n'agit que depuis une version qui l'embarque déjà). Linux : seul l'**AppImage** s'auto-update. macOS non signé : 1re install clic-droit → Ouvrir.
+
+---
+
+## Build & CI — pièges connus
+
+- **PyInstaller ne cross-compile pas** : build sur chaque OS. macOS Intel exige un vrai runner `macos-13` (runners Intel GitHub rares/lents).
+- `scripts/build-sidecar.mjs` choisit le python du venv selon l'OS (`bin/` vs `Scripts/`) ; `package.json` → `build:sidecar` pointe dessus.
+- `bundle.resources` = `"sidecar-bin/*"` (glob) pour embarquer `lora-sidecar` **ou** `lora-sidecar.exe`.
+- CI : **Node 22** requis (pnpm 11 utilise `node:sqlite`, absent < Node 22) ; **Python 3.12** (wheels cp312 onnxruntime/numpy/pillow).
+- `patchelf` **Linux-only** dans `requirements-build.txt` (`; sys_platform == "linux"`) : pas de wheels macOS/Windows, inutile hors AppImage.
+- **`target/` Cargo non relocatable** : déplacer/renommer le repo ⇒ chemins absolus périmés ⇒ `cargo clean` obligatoire.
+
+---
+
+## Git / workflow (préférences)
+
+- **Ne pas commiter ni pusher** sans demande explicite : faire les modifs, laisser l'utilisateur commiter.
+- **Aucun trailer `Co-Authored-By`** dans les messages de commit.
+
+---
+
 ## Priorités de développement
 
 ### Phase 1 — Fondations
@@ -301,3 +331,4 @@ WD_THRESHOLD=0.35               # seuil de confiance minimum
 - [ ] Validation UI (review batch)
 - [ ] Raccourcis clavier
 - [ ] Claude Vision pour matching ambigu (optionnel)
+- [x] Auto-update (`tauri-plugin-updater`) + release CI GitHub Actions
