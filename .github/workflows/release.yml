@@ -46,7 +46,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22 # pnpm 11 needs Node >= 22 (uses node:sqlite)
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
