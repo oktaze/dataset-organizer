@@ -23,7 +23,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="LoRA Organizer Sidecar", version="0.2.1")
+app = FastAPI(title="LoRA Organizer Sidecar", version="0.3.0")
 
 # The Tauri webview (http://localhost:1420 in dev, tauri://localhost in prod)
 # is a different origin than this 127.0.0.1 sidecar. Allow all origins —
