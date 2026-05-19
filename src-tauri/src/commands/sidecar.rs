@@ -61,6 +61,18 @@ fn frozen_exe_name() -> &'static str {
     }
 }
 
+/// Windows: stop the child console app from popping its own console window.
+/// No-op elsewhere (the flag only exists on Windows).
+#[cfg(windows)]
+fn hide_console(cmd: &mut Command) {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW);
+}
+
+#[cfg(not(windows))]
+fn hide_console(_cmd: &mut Command) {}
+
 /// Locate the PyInstaller binary shipped as a bundle resource. Tauri's
 /// resource layout has varied across versions, so try the likely paths.
 fn frozen_binary(app: &AppHandle) -> Result<PathBuf, String> {
@@ -138,6 +150,8 @@ fn build_command(app: &AppHandle, port: u16) -> Result<Command, String> {
         cmd.args(["--host", "127.0.0.1", "--port", &port_s])
             .current_dir(&cwd)
             .env("HF_HOME", &hf_home);
+        // No flashing console window on Windows for the frozen sidecar.
+        hide_console(&mut cmd);
         Ok(cmd)
     }
 }
