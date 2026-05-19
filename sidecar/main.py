@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-# Load sidecar/.env (ANTHROPIC_API_KEY, WD_*, CLAUDE_VISION_MODEL) if present.
+# Load sidecar/.env (WD_* tuning) if present.
 try:
     from dotenv import load_dotenv
 
@@ -16,16 +16,14 @@ try:
 except Exception:
     pass
 
+import caption
+import costume_matcher
+import tagger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-import caption
-import claude_vision
-import costume_matcher
-import tagger
-
-app = FastAPI(title="LoRA Organizer Sidecar", version="0.2.0")
+app = FastAPI(title="LoRA Organizer Sidecar", version="0.2.1")
 
 # The Tauri webview (http://localhost:1420 in dev, tauri://localhost in prod)
 # is a different origin than this 127.0.0.1 sidecar. Allow all origins —
@@ -83,9 +81,7 @@ def health() -> HealthResponse:
 
 @app.post("/tag", response_model=TagResponse)
 def tag(req: TagRequest) -> TagResponse:
-    tags = tagger.tag_image(
-        req.image_path, req.threshold, req.max_tags, req.blacklist
-    )
+    tags = tagger.tag_image(req.image_path, req.threshold, req.max_tags, req.blacklist)
     return TagResponse(tags=tags)
 
 
@@ -94,9 +90,7 @@ def tag_batch(req: TagBatchRequest) -> TagBatchResponse:
     results = [
         TagBatchResultItem(
             path=p,
-            tags=tagger.tag_image(
-                p, req.threshold, req.max_tags, req.blacklist
-            ),
+            tags=tagger.tag_image(p, req.threshold, req.max_tags, req.blacklist),
         )
         for p in req.image_paths
     ]
@@ -113,10 +107,7 @@ class CostumeIn(BaseModel):
 class CostumeMatchRequest(BaseModel):
     image_path: str
     costumes: list[CostumeIn]
-    use_claude: bool = False
     threshold: Optional[float] = None
-    api_key: Optional[str] = None
-    model: Optional[str] = None
 
 
 class CostumeMatchResponse(BaseModel):
@@ -142,19 +133,6 @@ class CaptionBuildResponse(BaseModel):
 @app.post("/costume/match", response_model=CostumeMatchResponse)
 def costume_match(req: CostumeMatchRequest) -> CostumeMatchResponse:
     costumes = [c.model_dump() for c in req.costumes]
-
-    if req.use_claude and claude_vision.usable(req.api_key):
-        try:
-            return CostumeMatchResponse(
-                **claude_vision.match(
-                    req.image_path, costumes, req.api_key, req.model
-                )
-            )
-        except Exception as e:
-            # Any failure (missing anthropic pkg, API/network error) →
-            # degrade gracefully to the WD Tagger matcher.
-            print(f"[claude_vision] falling back to WD Tagger: {e}")
-
     result = costume_matcher.match(req.image_path, costumes, req.threshold)
     return CostumeMatchResponse(**result)
 

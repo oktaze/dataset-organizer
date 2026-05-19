@@ -36,7 +36,6 @@ lora-organizer/
 │   ├── main.py                 # Entrée FastAPI, routes
 │   ├── tagger.py               # WD Tagger v3 (ONNX)
 │   ├── costume_matcher.py      # Logique matching costume → tags
-│   ├── claude_vision.py        # Appels Claude Vision API (optionnel)
 │   ├── models/                 # Modèles ONNX téléchargés au premier run
 │   └── requirements.txt
 ├── CLAUDE.md                   # Ce fichier
@@ -58,7 +57,6 @@ lora-organizer/
 | DB locale | SQLite via rusqlite (Rust) | — |
 | Python runtime | FastAPI + Uvicorn | — |
 | Auto-tagger | WD Tagger v3 (ONNX) | wd-vit-tagger-v3 |
-| Vision LLM | Claude claude-sonnet-4-20250514 (Vision) | via API Anthropic |
 | Drag & drop | @dnd-kit | v6 |
 | Virtualisation liste | TanStack Virtual | v3 |
 
@@ -137,12 +135,12 @@ POST /costume/match
   body: {
     image_path: string,
     costumes: [{id, tags: string[], color_tags: string[]}],
-    use_claude?: bool
+    threshold?: float
   }
   return: {
     best_costume_id: string,
     scores: {[costume_id]: float},
-    method: "wd_tagger" | "claude_vision"
+    method: "wd_tagger"
   }
 
 POST /caption/build
@@ -268,7 +266,6 @@ cd sidecar && python download_models.py
 VITE_SIDECAR_PORT=7842          # override port en dev
 
 # sidecar/.env
-ANTHROPIC_API_KEY=sk-...        # pour Claude Vision (optionnel)
 WD_MODEL=wd-vit-tagger-v3       # ou wd-swinv2-tagger-v3
 WD_THRESHOLD=0.35               # seuil de confiance minimum
 ```
@@ -330,5 +327,5 @@ WD_THRESHOLD=0.35               # seuil de confiance minimum
 - [ ] Export dataset complet
 - [ ] Validation UI (review batch)
 - [ ] Raccourcis clavier
-- [ ] Claude Vision pour matching ambigu (optionnel)
+- [ ] Vision LLM pour enrichissement (idée future, à repenser — l'ancienne implémentation Claude Vision « matching costume » a été retirée car peu de plus-value)
 - [x] Auto-update (`tauri-plugin-updater`) + release CI GitHub Actions

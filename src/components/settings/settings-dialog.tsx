@@ -8,10 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { Download, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
-import { useSettingsStore, CLAUDE_MODELS } from "@/stores/use-settings-store";
 import { useModelDownload } from "@/hooks/use-model-download";
 import { useUpdaterStore } from "@/stores/use-updater-store";
 import { checkForUpdates, relaunchApp } from "@/hooks/use-app-updater";
@@ -23,10 +20,6 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
-  const apiKey = useSettingsStore((s) => s.anthropicApiKey);
-  const setApiKey = useSettingsStore((s) => s.setAnthropicApiKey);
-  const model = useSettingsStore((s) => s.claudeModel);
-  const setModel = useSettingsStore((s) => s.setClaudeModel);
   const wd = useModelDownload();
 
   const updState = useUpdaterStore((s) => s.state);
@@ -46,8 +39,7 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            Claude Vision is an optional, paid fallback for costume matching.
-            WD Tagger (local, free) is always the default.
+            App updates and the local WD Tagger model.
           </DialogDescription>
         </DialogHeader>
 
@@ -151,45 +143,6 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 Download
               </Button>
             </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="set-key">Anthropic API key</Label>
-            <Input
-              id="set-key"
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-ant-…"
-              autoComplete="off"
-              spellCheck={false}
-            />
-            <p className="text-[11px] leading-relaxed text-muted-foreground">
-              Stored locally on this machine in plaintext (like the rest of
-              the app's data). Sent only to the local sidecar over loopback,
-              only when Claude Vision is enabled for a project. Leave empty to
-              fall back to <code>ANTHROPIC_API_KEY</code> in{" "}
-              <code>sidecar/.env</code>.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="set-model">Claude Vision model</Label>
-            <Select
-              id="set-model"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-            >
-              {CLAUDE_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </Select>
-            <p className="text-[11px] text-muted-foreground">
-              Per-image cost estimate. Enable Claude Vision per project in the
-              gallery's <strong>Reprocess</strong> dialog.
-            </p>
           </div>
         </div>
 

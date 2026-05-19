@@ -47,8 +47,6 @@ PyInstaller.__main__.run(
         "onnxruntime",
         "--collect-all",
         "huggingface_hub",
-        "--collect-all",
-        "anthropic",
         "--collect-submodules",
         "uvicorn",
         "--collect-data",

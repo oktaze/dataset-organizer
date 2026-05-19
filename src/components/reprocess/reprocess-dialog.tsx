@@ -54,10 +54,6 @@ export function ReprocessDialog({
     (s) => s.existingPolicy[project.id] ?? DEFAULT_EXISTING_POLICY,
   );
   const setExistingPolicy = useSettingsStore((s) => s.setExistingPolicy);
-  const claudeVision = useSettingsStore(
-    (s) => s.claudeVision[project.id] ?? false,
-  );
-  const setClaudeVision = useSettingsStore((s) => s.setClaudeVision);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -180,27 +176,6 @@ export function ReprocessDialog({
               </option>
             </Select>
           </div>
-
-          {project.type === "character" && (
-            <label className="flex items-start gap-2 text-xs text-foreground">
-              <input
-                type="checkbox"
-                checked={claudeVision}
-                onChange={(e) =>
-                  setClaudeVision(project.id, e.target.checked)
-                }
-                className="mt-0.5 size-3.5 accent-primary"
-              />
-              <span>
-                Use Claude Vision for costume matching
-                <span className="block text-[11px] text-muted-foreground">
-                  More accurate on ambiguous outfits. Set your API key & model
-                  in <strong>Settings</strong> (gear, top-left) — falls back to
-                  WD Tagger if unset. Also applies to imports.
-                </span>
-              </span>
-            </label>
-          )}
 
           {existingPolicy === "overwrite" ? (
             <p className="rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-400">

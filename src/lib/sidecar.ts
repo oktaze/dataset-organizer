@@ -106,17 +106,11 @@ export const sidecar = {
     imagePath: string,
     costumes: CostumeMatchInput[],
     threshold?: number,
-    useClaude = false,
-    apiKey?: string,
-    model?: string,
   ) =>
     post<CostumeMatchResult>("/costume/match", {
       image_path: imagePath,
       costumes,
       threshold,
-      use_claude: useClaude,
-      api_key: apiKey || undefined,
-      model: model || undefined,
     }),
 
   buildCaption: (input: CaptionBuildInput) =>

@@ -2,19 +2,12 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export const DEFAULT_THRESHOLD = 0.35;
-export const DEFAULT_CLAUDE_MODEL = "claude-opus-4-7";
 /** Max number of auto tags kept per image. 0 = no limit. */
 export const DEFAULT_MAX_TAGS = 0;
 
 /** What to do when an image already has tags at tagging time. */
 export type ExistingPolicy = "ignore" | "append" | "overwrite";
 export const DEFAULT_EXISTING_POLICY: ExistingPolicy = "ignore";
-
-export const CLAUDE_MODELS = [
-  { id: "claude-opus-4-7", label: "Opus 4.7 — best, priciest (~$0.009/img)" },
-  { id: "claude-sonnet-4-6", label: "Sonnet 4.6 — balanced (~$0.005/img)" },
-  { id: "claude-haiku-4-5", label: "Haiku 4.5 — cheapest (~$0.002/img)" },
-] as const;
 
 interface SettingsState {
   /** WD Tagger confidence threshold, per project id. */
@@ -29,12 +22,6 @@ interface SettingsState {
   appendTags: Record<string, string>;
   /** What to do when an image already has tags, per project id. */
   existingPolicy: Record<string, ExistingPolicy>;
-  /** Use Claude Vision for costume matching, per project id. */
-  claudeVision: Record<string, boolean>;
-  /** App-wide Anthropic API key (stored locally, plaintext). */
-  anthropicApiKey: string;
-  /** App-wide Claude Vision model id. */
-  claudeModel: string;
   /** First-launch WD model download prompt already shown. */
   modelPromptSeen: boolean;
   setThreshold: (projectId: string, value: number) => void;
@@ -43,9 +30,6 @@ interface SettingsState {
   setPrependTags: (projectId: string, value: string) => void;
   setAppendTags: (projectId: string, value: string) => void;
   setExistingPolicy: (projectId: string, value: ExistingPolicy) => void;
-  setClaudeVision: (projectId: string, value: boolean) => void;
-  setAnthropicApiKey: (key: string) => void;
-  setClaudeModel: (model: string) => void;
   setModelPromptSeen: (seen: boolean) => void;
 }
 
@@ -58,9 +42,6 @@ export const useSettingsStore = create<SettingsState>()(
       prependTags: {},
       appendTags: {},
       existingPolicy: {},
-      claudeVision: {},
-      anthropicApiKey: "",
-      claudeModel: DEFAULT_CLAUDE_MODEL,
       modelPromptSeen: false,
       setThreshold: (projectId, value) =>
         set((s) => ({
@@ -86,12 +67,6 @@ export const useSettingsStore = create<SettingsState>()(
         set((s) => ({
           existingPolicy: { ...s.existingPolicy, [projectId]: value },
         })),
-      setClaudeVision: (projectId, value) =>
-        set((s) => ({
-          claudeVision: { ...s.claudeVision, [projectId]: value },
-        })),
-      setAnthropicApiKey: (anthropicApiKey) => set({ anthropicApiKey }),
-      setClaudeModel: (claudeModel) => set({ claudeModel }),
       setModelPromptSeen: (modelPromptSeen) => set({ modelPromptSeen }),
     }),
     { name: "lora-organizer-settings" },
@@ -131,16 +106,4 @@ export function getExistingPolicy(projectId: string): ExistingPolicy {
     useSettingsStore.getState().existingPolicy[projectId] ??
     DEFAULT_EXISTING_POLICY
   );
-}
-
-export function getClaudeVision(projectId: string): boolean {
-  return useSettingsStore.getState().claudeVision[projectId] ?? false;
-}
-
-export function getAnthropicApiKey(): string {
-  return useSettingsStore.getState().anthropicApiKey.trim();
-}
-
-export function getClaudeModel(): string {
-  return useSettingsStore.getState().claudeModel || DEFAULT_CLAUDE_MODEL;
 }

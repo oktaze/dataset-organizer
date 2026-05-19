@@ -15,9 +15,6 @@ import {
   getPrependTags,
   getAppendTags,
   getExistingPolicy,
-  getClaudeVision,
-  getAnthropicApiKey,
-  getClaudeModel,
   type ExistingPolicy,
 } from "@/stores/use-settings-store";
 import type { Costume, ImageItem, Project, TagScore } from "@/lib/types";
@@ -37,9 +34,6 @@ export interface PipelineCtx {
   prependTags: string[];
   appendTags: string[];
   existingPolicy: ExistingPolicy;
-  useClaude: boolean;
-  apiKey: string;
-  model: string;
 }
 
 /** Build the context once, then reuse it across many images. */
@@ -68,9 +62,6 @@ export async function makePipelineCtx(project: Project): Promise<PipelineCtx> {
     prependTags: getPrependTags(project.id),
     appendTags: getAppendTags(project.id),
     existingPolicy: getExistingPolicy(project.id),
-    useClaude: getClaudeVision(project.id),
-    apiKey: getAnthropicApiKey(),
-    model: getClaudeModel(),
   };
 }
 
@@ -138,9 +129,6 @@ export async function processImage(
         img.filepath,
         ctx.matchInput,
         ctx.threshold,
-        ctx.useClaude,
-        ctx.apiKey,
-        ctx.model,
       );
       costumeScore = m.scores;
       costumeId = m.best_costume_id;

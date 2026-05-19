@@ -6,8 +6,7 @@ a local WD Tagger v3 model, assembles training captions following
 consistent rules, and exports a clean dataset — with a dedicated workflow
 for **character** LoRAs built around reusable *costumes*.
 
-> Tauri v2 + React + a bundled Python sidecar. Runs fully offline; Claude
-> Vision is an optional, paid extra.
+> Tauri v2 + React + a bundled Python sidecar. Runs fully offline.
 
 ---
 
@@ -32,15 +31,12 @@ Key features:
 - **Gallery** with a virtualized grid, per-image tag editor, keyboard
   shortcuts, and batch review.
 - **Dataset export** as a flat folder of `image` + `image.txt`, or a zip.
-- **Optional Claude Vision** fallback for ambiguous costume matching
-  (requires an Anthropic API key; off by default).
 - **Built-in auto-update** (VS Code-style): checks on startup, downloads
   silently, prompts to restart. Manual check in Settings.
 
 Your data stays local: a SQLite DB and settings live in the OS app-data
 dir; the WD model (~360 MB) downloads on first use into that same dir and
-is **not** bundled. Any Anthropic API key is stored locally and only sent
-to the local sidecar over loopback when Claude Vision is enabled.
+is **not** bundled.
 
 ---
 
@@ -54,7 +50,6 @@ to the local sidecar over loopback when Claude Vision is enabled.
 | Local DB | SQLite via `rusqlite` |
 | Sidecar | Python FastAPI (frozen with PyInstaller for release) |
 | Auto-tagger | WD Tagger v3 (ONNX Runtime) |
-| Vision LLM | Claude (Anthropic API) — optional |
 | Updates | `tauri-plugin-updater` + GitHub Releases |
 
 ```
