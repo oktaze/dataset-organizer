@@ -257,6 +257,22 @@ pub struct ExportItem {
     pub subdir: Option<String>,
 }
 
+/// When present, `export_dataset` also writes a Hugging Face dataset card
+/// (`README.md`) and a `metadata.jsonl` (file_name + caption) so the folder
+/// loads as a `datasets` imagefolder. Built here because this is the only
+/// place that knows the *resolved* (sanitized/deduped) filenames.
+#[derive(Deserialize)]
+pub struct DatasetMeta {
+    pub project_name: String,
+    pub description: Option<String>,
+}
+
+#[derive(Serialize)]
+struct MetaLine {
+    file_name: String,
+    text: String,
+}
+
 fn sanitize(s: &str) -> String {
     let cleaned: String = s
         .chars()
@@ -311,6 +327,7 @@ fn resolve(it: &ExportItem, used: &mut HashSet<String>) -> Resolved {
 pub async fn export_dataset(
     output_dir: String,
     items: Vec<ExportItem>,
+    metadata: Option<DatasetMeta>,
 ) -> Result<usize, String> {
     blocking(move || {
         let root = Path::new(&output_dir);
@@ -319,6 +336,8 @@ pub async fn export_dataset(
 
         let mut used: HashSet<String> = HashSet::new();
         let mut count = 0usize;
+        // Root-relative "<ns>/<stem>.<ext>" + caption, for metadata.jsonl.
+        let mut meta_lines: Vec<MetaLine> = Vec::new();
 
         for it in &items {
             let r = resolve(it, &mut used);
@@ -338,10 +357,91 @@ pub async fn export_dataset(
             })?;
             write_atomic(&txt_path, it.caption.as_bytes())?;
 
+            if metadata.is_some() {
+                let file_name = if r.ns.is_empty() {
+                    format!("{}.{}", r.stem, r.ext)
+                } else {
+                    format!("{}/{}.{}", r.ns, r.stem, r.ext)
+                };
+                meta_lines.push(MetaLine {
+                    file_name,
+                    text: it.caption.clone(),
+                });
+            }
+
             count += 1;
         }
 
+        if let Some(meta) = metadata {
+            let jsonl: String = meta_lines
+                .iter()
+                .map(|m| {
+                    serde_json::to_string(m)
+                        .map_err(|e| format!("metadata json: {e}"))
+                })
+                .collect::<Result<Vec<_>, _>>()?
+                .join("\n");
+            write_atomic(&root.join("metadata.jsonl"), jsonl.as_bytes())?;
+
+            let desc = meta
+                .description
+                .as_deref()
+                .filter(|d| !d.trim().is_empty())
+                .unwrap_or(
+                    "Training dataset for a Stable Diffusion / Illustrious \
+                     XL LoRA. Each image has a sibling `.txt` caption.",
+                );
+            let readme = format!(
+                "---\nlicense: other\ntask_categories:\n- text-to-image\n\
+                 tags:\n- lora\n- stable-diffusion\nsize_categories:\n\
+                 - n<1K\n---\n\n# {name}\n\n{desc}\n\n{count} image{plural} \
+                 with caption sidecars. Built with \
+                 [lora-organizer](https://github.com/oktaze/dataset-organizer).\n",
+                name = meta.project_name,
+                desc = desc,
+                count = count,
+                plural = if count == 1 { "" } else { "s" },
+            );
+            write_atomic(&root.join("README.md"), readme.as_bytes())?;
+        }
+
         Ok(count)
+    })
+    .await
+}
+
+/// Create and return a fresh, empty temp directory under the app data dir,
+/// used to stage a dataset before uploading it to Hugging Face. The unique
+/// subdir name (timestamp + pid) avoids a `uuid` dependency.
+#[tauri::command]
+pub async fn hf_export_tmpdir(
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    blocking(move || {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("app_data_dir: {e}"))?
+            .join("hf-export-tmp")
+            .join(format!("{}-{nanos}", std::process::id()));
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("create {}: {e}", dir.display()))?;
+        Ok(dir.to_string_lossy().into_owned())
+    })
+    .await
+}
+
+/// Recursively delete a directory. Used to clean up the staged dataset
+/// after a Hugging Face upload (or on failure/cancel).
+#[tauri::command]
+pub async fn remove_dir(path: String) -> Result<(), String> {
+    blocking(move || {
+        std::fs::remove_dir_all(&path)
+            .map_err(|e| format!("remove {path}: {e}"))
     })
     .await
 }

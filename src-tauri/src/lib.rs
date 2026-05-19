@@ -14,6 +14,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_store::Builder::new().build())
         .manage(SidecarState::new())
         .setup(|app| {
             // SQLite: open + migrate, keep the connection in managed state.
@@ -50,6 +51,8 @@ pub fn run() {
             commands::filesystem::get_image_thumbnail,
             commands::filesystem::export_dataset,
             commands::filesystem::export_dataset_zip,
+            commands::filesystem::hf_export_tmpdir,
+            commands::filesystem::remove_dir,
             commands::db::db_query,
             commands::db::db_execute,
             commands::sidecar::start_sidecar,

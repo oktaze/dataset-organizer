@@ -16,12 +16,13 @@ try:
 except Exception:
     pass
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import caption
 import costume_matcher
+import hf_upload
 import tagger
 
 app = FastAPI(title="Dataset Organizer Sidecar", version="0.4.1")
@@ -170,3 +171,46 @@ def model_status() -> ModelStatus:
 def model_download() -> ModelStatus:
     tagger.start_download()
     return ModelStatus(**tagger.download_status())
+
+
+class HfValidateRequest(BaseModel):
+    token: str
+
+
+class HfValidateResponse(BaseModel):
+    username: str
+
+
+class HfUploadRequest(BaseModel):
+    folder: str
+    repo_id: str  # "username/dataset-name"
+    token: str
+    private: bool = False
+
+
+class HfUploadStatus(BaseModel):
+    state: str  # idle | uploading | done | error
+    phase: str
+    done: int
+    total: int
+    repo_url: Optional[str] = None
+    error: Optional[str] = None
+
+
+@app.post("/hf/validate", response_model=HfValidateResponse)
+def hf_validate(req: HfValidateRequest) -> HfValidateResponse:
+    try:
+        return HfValidateResponse(username=hf_upload.whoami(req.token))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/hf/upload", response_model=HfUploadStatus)
+def hf_upload_start(req: HfUploadRequest) -> HfUploadStatus:
+    hf_upload.start_upload(req.folder, req.repo_id, req.token, req.private)
+    return HfUploadStatus(**hf_upload.upload_status())
+
+
+@app.get("/hf/upload/status", response_model=HfUploadStatus)
+def hf_upload_status() -> HfUploadStatus:
+    return HfUploadStatus(**hf_upload.upload_status())

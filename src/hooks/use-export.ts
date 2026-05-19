@@ -24,11 +24,40 @@ export function selectImages(
   return images.filter((i) => i.status !== "pending");
 }
 
-function captionFor(img: ImageItem, project: Project): string {
+export function captionFor(img: ImageItem, project: Project): string {
   const c = img.caption?.trim();
   if (c) return c;
   if (img.tagsFinal.length > 0) return img.tagsFinal.join(", ");
   return project.trigger;
+}
+
+/** Select images by scope, resolve the per-costume sub-folder, and build
+ *  the `ExportItem[]`. Shared by folder/zip export and HuggingFace upload
+ *  so caption + grouping logic stays in one place. */
+export async function buildExportItems(
+  project: Project,
+  images: ImageItem[],
+  opts: { scope: ExportScope; groupByCostume: boolean },
+): Promise<{ chosen: ImageItem[]; items: ExportItem[] }> {
+  const chosen = selectImages(images, opts.scope);
+
+  let costumeName: (id: string | null) => string | undefined = () =>
+    undefined;
+  if (opts.groupByCostume && project.type === "character") {
+    const costumes = await costumesDb.list(project.id);
+    const byId = new Map(costumes.map((c) => [c.id, c.name]));
+    costumeName = (id) =>
+      id ? (byId.get(id) ?? "_unassigned") : "_unassigned";
+  }
+
+  const items: ExportItem[] = chosen.map((img) => ({
+    source_path: img.filepath,
+    target_name: img.filename,
+    caption: captionFor(img, project),
+    subdir: costumeName(img.costumeId),
+  }));
+
+  return { chosen, items };
 }
 
 export function useExport() {
@@ -45,8 +74,7 @@ export function useExport() {
     setError(null);
     setResult(null);
 
-    const chosen = selectImages(images, opts.scope);
-    if (chosen.length === 0) {
+    if (selectImages(images, opts.scope).length === 0) {
       setError("No images match this selection.");
       return;
     }
@@ -63,21 +91,7 @@ export function useExport() {
 
     setRunning(true);
     try {
-      let costumeName: (id: string | null) => string | undefined = () =>
-        undefined;
-      if (opts.groupByCostume && project.type === "character") {
-        const costumes = await costumesDb.list(project.id);
-        const byId = new Map(costumes.map((c) => [c.id, c.name]));
-        costumeName = (id) =>
-          id ? (byId.get(id) ?? "_unassigned") : "_unassigned";
-      }
-
-      const items: ExportItem[] = chosen.map((img) => ({
-        source_path: img.filepath,
-        target_name: img.filename,
-        caption: captionFor(img, project),
-        subdir: costumeName(img.costumeId),
-      }));
+      const { chosen, items } = await buildExportItems(project, images, opts);
 
       const count =
         opts.format === "zip"

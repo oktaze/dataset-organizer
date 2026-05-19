@@ -23,6 +23,7 @@
     "fs:allow-exists",
     "fs:allow-stat",
     "updater:default",
-    "process:allow-restart"
+    "process:allow-restart",
+    "store:default"
   ]
 }

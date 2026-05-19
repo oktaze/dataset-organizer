@@ -24,6 +24,9 @@ interface SettingsState {
   existingPolicy: Record<string, ExistingPolicy>;
   /** First-launch WD model download prompt already shown. */
   modelPromptSeen: boolean;
+  /** HuggingFace username of the connected account (token is in
+   *  hf-token-store, not here). Null when not connected. */
+  hfUsername: string | null;
   setThreshold: (projectId: string, value: number) => void;
   setMaxTags: (projectId: string, value: number) => void;
   setBlacklist: (projectId: string, value: string) => void;
@@ -31,6 +34,7 @@ interface SettingsState {
   setAppendTags: (projectId: string, value: string) => void;
   setExistingPolicy: (projectId: string, value: ExistingPolicy) => void;
   setModelPromptSeen: (seen: boolean) => void;
+  setHfUsername: (name: string | null) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -43,6 +47,7 @@ export const useSettingsStore = create<SettingsState>()(
       appendTags: {},
       existingPolicy: {},
       modelPromptSeen: false,
+      hfUsername: null,
       setThreshold: (projectId, value) =>
         set((s) => ({
           thresholds: { ...s.thresholds, [projectId]: value },
@@ -68,6 +73,7 @@ export const useSettingsStore = create<SettingsState>()(
           existingPolicy: { ...s.existingPolicy, [projectId]: value },
         })),
       setModelPromptSeen: (modelPromptSeen) => set({ modelPromptSeen }),
+      setHfUsername: (hfUsername) => set({ hfUsername }),
     }),
     { name: "dataset-organizer-settings" },
   ),
@@ -106,4 +112,8 @@ export function getExistingPolicy(projectId: string): ExistingPolicy {
     useSettingsStore.getState().existingPolicy[projectId] ??
     DEFAULT_EXISTING_POLICY
   );
+}
+
+export function getHfUsername(): string | null {
+  return useSettingsStore.getState().hfUsername;
 }

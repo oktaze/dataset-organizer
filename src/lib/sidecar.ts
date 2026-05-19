@@ -36,6 +36,15 @@ export interface ModelStatus {
   error: string | null;
 }
 
+export interface HfUploadStatus {
+  state: "idle" | "uploading" | "done" | "error";
+  phase: string;
+  done: number;
+  total: number;
+  repo_url: string | null;
+  error: string | null;
+}
+
 export interface TagBatchResult {
   path: string;
   tags: TagScore[];
@@ -115,4 +124,26 @@ export const sidecar = {
 
   buildCaption: (input: CaptionBuildInput) =>
     post<{ caption: string }>("/caption/build", input),
+
+  validateHfToken: (token: string) =>
+    post<{ username: string }>("/hf/validate", { token }),
+
+  startHfUpload: (
+    folder: string,
+    repoId: string,
+    token: string,
+    isPrivate: boolean,
+  ) =>
+    post<HfUploadStatus>("/hf/upload", {
+      folder,
+      repo_id: repoId,
+      token,
+      private: isPrivate,
+    }),
+
+  hfUploadStatus: async (): Promise<HfUploadStatus> => {
+    const res = await fetch(`${baseUrl()}/hf/upload/status`);
+    if (!res.ok) throw new Error(`hf/upload/status ${res.status}`);
+    return (await res.json()) as HfUploadStatus;
+  },
 };

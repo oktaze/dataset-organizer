@@ -20,6 +20,13 @@ export interface ExportItem {
   subdir?: string;
 }
 
+/** When passed, `exportDataset` also writes a HF dataset card (README.md)
+ *  and metadata.jsonl so the folder loads as a `datasets` imagefolder. */
+export interface DatasetMeta {
+  project_name: string;
+  description?: string;
+}
+
 /**
  * Typed wrappers around the Rust IPC commands. Tauri v2 maps camelCase
  * JS keys to the snake_case Rust parameter names automatically.
@@ -40,13 +47,21 @@ export const tauri = {
   exportDataset: (
     outputDir: string,
     items: ExportItem[],
-  ): Promise<number> => invoke<number>("export_dataset", { outputDir, items }),
+    metadata?: DatasetMeta,
+  ): Promise<number> =>
+    invoke<number>("export_dataset", { outputDir, items, metadata }),
 
   exportDatasetZip: (
     outputPath: string,
     items: ExportItem[],
   ): Promise<number> =>
     invoke<number>("export_dataset_zip", { outputPath, items }),
+
+  hfExportTmpdir: (): Promise<string> =>
+    invoke<string>("hf_export_tmpdir"),
+
+  removeDir: (path: string): Promise<void> =>
+    invoke<void>("remove_dir", { path }),
 
   dbQuery: <T = unknown>(sql: string, params: unknown[]): Promise<T[]> =>
     invoke<T[]>("db_query", { sql, params }),
