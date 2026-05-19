@@ -18,6 +18,8 @@ import onnxruntime as ort
 from huggingface_hub import get_hf_file_metadata, hf_hub_download, hf_hub_url
 from PIL import Image
 
+from tag_format import format_tag, normalize_tag
+
 WD_REPO = "SmilingWolf/" + os.environ.get("WD_MODEL", "wd-vit-tagger-v3")
 WD_THRESHOLD = float(os.environ.get("WD_THRESHOLD", "0.35"))
 
@@ -177,16 +179,18 @@ def tag_image(
     probs = _session.run(None, {input_name: x})[0][0]
 
     result = [
-        {"tag": _tag_names[i], "score": float(p)}
+        {"tag": format_tag(_tag_names[i]), "score": float(p)}
         for i, p in enumerate(probs)
         if i < len(_tag_names) and p >= th
     ]
 
-    # Drop blacklisted tags (case-insensitive) before capping so a
-    # high-score blacklisted tag doesn't consume a max_tags slot.
-    bl = {t.strip().lower() for t in (blacklist or []) if t.strip()}
+    # Drop blacklisted tags before capping so a high-score blacklisted
+    # tag doesn't consume a max_tags slot. Normalized compare so a
+    # blacklist entry typed `blue_hair` still matches the `blue hair`
+    # we now emit.
+    bl = {normalize_tag(t) for t in (blacklist or []) if t.strip()}
     if bl:
-        result = [t for t in result if t["tag"].strip().lower() not in bl]
+        result = [t for t in result if normalize_tag(t["tag"]) not in bl]
 
     # ONNX output is in label-index order, not score order — sort so the
     # most confident tags survive the cap (and lead the caption).

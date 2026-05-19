@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+from tag_format import normalize_tag
+
 
 def build_caption(
     trigger: str,
@@ -24,18 +26,25 @@ def build_caption(
     costume_tags = costume_tags or []
     prepend_tags = prepend_tags or []
     append_tags = append_tags or []
-    constants = {t.strip() for t in constant_tags if t.strip()}
+    # Compare on the normalized form (underscores == spaces) so a constant
+    # typed `silver_hair` still excludes the `silver hair` WD now emits,
+    # and `blue_hair` (costume) doesn't duplicate `blue hair` (auto). The
+    # original text is kept in the output — user-typed underscores stay.
+    constants = {normalize_tag(t) for t in constant_tags if t.strip()}
 
     parts: list[str] = []
     seen: set[str] = set()
 
     def add(tag: str, force: bool = False) -> None:
         t = tag.strip()
-        if not t or t in seen:
+        if not t:
             return
-        if not force and t in constants:
+        key = normalize_tag(t)
+        if key in seen:
             return
-        seen.add(t)
+        if not force and key in constants:
+            return
+        seen.add(key)
         parts.append(t)
 
     if trigger.strip():
