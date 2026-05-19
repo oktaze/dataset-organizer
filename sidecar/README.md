@@ -1,4 +1,4 @@
-# LoRA Organizer — Python sidecar
+# Dataset Organizer — Python sidecar
 
 FastAPI service spawned automatically by the Tauri app. Endpoints:
 `GET /health`, `POST /tag`, `POST /tag/batch` (see CLAUDE.md for the full contract).
@@ -68,7 +68,7 @@ Notes:
   the resource would be `lora-sidecar.exe`.
 - **WD model is NOT bundled** (~70 MB installers, not ~430 MB). In the
   packaged app it lazily downloads (~360 MB) into the OS app-data dir
-  (`~/.local/share/com.adriendoy.lora-organizer/models` on Linux) — the
+  (`~/.local/share/com.oktaze.dataset-organizer/models` on Linux) — the
   first-launch prompt / Settings button trigger it. In dev it uses
   `sidecar/models`.
 - The Rust spawner picks dev vs frozen automatically via

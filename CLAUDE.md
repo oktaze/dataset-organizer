@@ -1,4 +1,4 @@
-# CLAUDE.md — LoRA Organizer
+# CLAUDE.md — Dataset Organizer
 
 ## Vision du projet
 Application desktop (Tauri v2 + React + Python sidecar) pour organiser des datasets d'images destinés au training de LoRAs (Stable Diffusion / Illustrious XL). Supporte trois types de LoRAs : **Character**, **Style**, **Concept**.
@@ -10,7 +10,7 @@ La feature centrale : pour les LoRAs de type Character, l'utilisateur définit d
 ## Architecture
 
 ```
-lora-organizer/
+dataset-organizer/
 ├── src/                        # Frontend React + TypeScript
 │   ├── components/
 │   │   ├── ui/                 # Composants génériques (shadcn/ui)
@@ -275,8 +275,8 @@ WD_THRESHOLD=0.35               # seuil de confiance minimum
 ## Auto-update & Releases
 
 - Updater intégré : `tauri-plugin-updater` + `tauri-plugin-process`, UX type VS Code (check au démarrage → download silencieux → bannière « Restart »). Hook `src/hooks/use-app-updater.ts` + store `src/stores/use-updater-store.ts` + `src/components/updates/update-banner.tsx`, monté une fois dans `AppShell`. Check manuel dans Settings.
-- Endpoint : `plugins.updater.endpoints` → `https://github.com/oktaze/lora-organizer/releases/latest/download/latest.json`. `bundle.createUpdaterArtifacts: true` ⇒ **chaque `pnpm tauri build` doit être signé**.
-- Clé minisign **hors repo** : `~/.tauri/lora-organizer-updater.key` (sans mot de passe). Pubkey committée dans `tauri.conf.json`. Secret CI : `TAURI_SIGNING_PRIVATE_KEY`. **Perte de la clé = plus aucun client ne peut s'updater.**
+- Endpoint : `plugins.updater.endpoints` → `https://github.com/oktaze/dataset-organizer/releases/latest/download/latest.json`. `bundle.createUpdaterArtifacts: true` ⇒ **chaque `pnpm tauri build` doit être signé**.
+- Clé minisign **hors repo** : `~/.tauri/dataset-organizer-updater.key` (sans mot de passe). Pubkey committée dans `tauri.conf.json`. Secret CI : `TAURI_SIGNING_PRIVATE_KEY`. **Perte de la clé = plus aucun client ne peut s'updater.**
 - `scripts/tauri.mjs` auto-charge cette clé si `TAURI_SIGNING_PRIVATE_KEY` n'est pas déjà posée ⇒ `pnpm tauri build` signe sans manip.
 - CI : `.github/workflows/release.yml`, déclenchée sur tag `v*`. Matrice Linux / Windows / macOS arm64. `tauri-action` build, signe, publie la Release + `latest.json`.
 - Flux release : bump `version` dans `src-tauri/tauri.conf.json` **+** `package.json` **+** `src-tauri/Cargo.toml` → `git tag vX.Y.Z` → push tags. L'updater compare à `latest.json` ⇒ **toujours bumper**.

@@ -1,4 +1,4 @@
-# LoRa Organizer
+# Dataset Organizer
 
 A desktop app for building and curating image datasets used to train
 **LoRAs** for Stable Diffusion / Illustrious XL. It auto-tags images with
@@ -108,7 +108,7 @@ pnpm tauri build
 
 `pnpm tauri` is wrapped (`scripts/tauri.mjs`): it sets
 `APPIMAGE_EXTRACT_AND_RUN=1`, puts the venv on `PATH`, and auto-loads the
-updater signing key from `~/.tauri/lora-organizer-updater.key` so signed
+updater signing key from `~/.tauri/dataset-organizer-updater.key` so signed
 bundles build without exporting env vars. PyInstaller does not
 cross-compile — build on each target OS.
 

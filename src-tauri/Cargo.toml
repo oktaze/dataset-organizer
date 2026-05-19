@@ -1,5 +1,5 @@
 [package]
-name = "lora-organizer"
+name = "dataset-organizer"
 version = "0.3.0"
 description = "Organize image datasets for training Stable Diffusion / Illustrious XL LoRAs — local auto-tagging, character costume system, dataset export."
 authors = ["you"]
@@ -11,7 +11,7 @@ edition = "2021"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "lora_organizer_lib"
+name = "dataset_organizer_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

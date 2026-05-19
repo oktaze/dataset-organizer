@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    lora_organizer_lib::run()
+    dataset_organizer_lib::run()
 }

@@ -46,7 +46,7 @@ export function ModelDownloadPrompt() {
         <DialogHeader>
           <DialogTitle>Download the auto-tagger model?</DialogTitle>
           <DialogDescription>
-            LoRa Organizer uses the WD Tagger v3 model (~360 MB, one-time) to
+            Dataset Organizer uses the WD Tagger v3 model (~360 MB, one-time) to
             automatically tag imported images. You can download it now, or
             later from <strong>Settings</strong> (gear, top-left). Until then,
             importing won't auto-tag.

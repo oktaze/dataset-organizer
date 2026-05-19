@@ -20,7 +20,7 @@ const isWin = process.platform === "win32";
 // TAURI_SIGNING_KEY_FILE. The key was generated with an empty password.
 const keyFile =
   process.env.TAURI_SIGNING_KEY_FILE ||
-  path.join(os.homedir(), ".tauri", "lora-organizer-updater.key");
+  path.join(os.homedir(), ".tauri", "dataset-organizer-updater.key");
 const signingEnv = {};
 if (!process.env.TAURI_SIGNING_PRIVATE_KEY && existsSync(keyFile)) {
   signingEnv.TAURI_SIGNING_PRIVATE_KEY = readFileSync(keyFile, "utf8");

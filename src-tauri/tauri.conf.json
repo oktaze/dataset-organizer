@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "LoRa Organizer",
+  "productName": "Dataset Organizer",
   "version": "0.3.0",
-  "identifier": "com.oktaze.lora-organizer",
+  "identifier": "com.oktaze.dataset-organizer",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "LoRa Organizer",
+        "title": "Dataset Organizer",
         "width": 1440,
         "height": 900,
         "minWidth": 1100,
@@ -28,7 +28,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDcwNkIyRjk0QjQ0QTQ2RjgKUldUNFJrcTBsQzlyY0lvNVVWNnRhZXpyYjJIcVJ1MFh2RkR4RkRyWkl2ZkxsSTJNcUlmUWVnaGMK",
       "endpoints": [
-        "https://github.com/oktaze/lora-organizer/releases/latest/download/latest.json"
+        "https://github.com/oktaze/dataset-organizer/releases/latest/download/latest.json"
       ]
     }
   },

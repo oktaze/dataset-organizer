@@ -69,7 +69,7 @@ export const useSettingsStore = create<SettingsState>()(
         })),
       setModelPromptSeen: (modelPromptSeen) => set({ modelPromptSeen }),
     }),
-    { name: "lora-organizer-settings" },
+    { name: "dataset-organizer-settings" },
   ),
 );
 

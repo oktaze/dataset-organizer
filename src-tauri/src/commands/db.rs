@@ -73,7 +73,7 @@ pub fn init(app: &AppHandle) -> Result<Connection, String> {
         .app_data_dir()
         .map_err(|e| format!("app_data_dir: {e}"))?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("create_dir_all: {e}"))?;
-    let db_path = dir.join("lora-organizer.db");
+    let db_path = dir.join("dataset-organizer.db");
     let conn = Connection::open(&db_path).map_err(|e| format!("open db: {e}"))?;
     conn.execute_batch(SCHEMA).map_err(|e| format!("migrate: {e}"))?;
     Ok(conn)

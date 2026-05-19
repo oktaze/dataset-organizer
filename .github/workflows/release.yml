@@ -72,7 +72,7 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: "1"
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "lora-organizer ${{ github.ref_name }}"
+          releaseName: "dataset-organizer ${{ github.ref_name }}"
           releaseBody: "Auto-update enabled. Each update re-downloads the full app bundle (incl. the ~63 MB Python sidecar); the WD Tagger model is unaffected. macOS builds are unsigned — on first manual install, right-click → Open."
           releaseDraft: false
           prerelease: false

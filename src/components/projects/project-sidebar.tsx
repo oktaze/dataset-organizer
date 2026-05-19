@@ -34,7 +34,7 @@ export function ProjectSidebar() {
     <aside className="flex h-full flex-col overflow-hidden border-r border-sidebar-border bg-sidebar">
       <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3.5">
         <h1 className="text-sm font-semibold tracking-tight text-sidebar-foreground">
-          LoRa Organizer
+          Dataset Organizer
         </h1>
         <button
           type="button"
