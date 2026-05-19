@@ -1,9 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { ProjectSidebar } from "@/components/projects/project-sidebar";
 import { Gallery } from "@/components/gallery/gallery";
 import { TagEditor } from "@/components/gallery/tag-editor";
 import { CostumesPanel } from "@/components/costumes/costumes-panel";
 import { StyleConceptBuilder } from "@/components/style/style-concept-builder";
+import { StatsPanel } from "@/components/stats/stats-panel";
 import { useSidecar, type SidecarStatus } from "@/hooks/use-sidecar";
 import { useProjects } from "@/hooks/use-projects";
 import { useImages, useUpdateImage } from "@/hooks/use-images";
@@ -12,9 +14,11 @@ import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useModelDownload } from "@/hooks/use-model-download";
 import { useAppUpdater } from "@/hooks/use-app-updater";
 import { ModelDownloadPrompt } from "@/components/model/model-download-prompt";
+import { ShortcutsDialog } from "@/components/help/shortcuts-dialog";
 import { UpdateBanner } from "@/components/updates/update-banner";
 import { useProjectStore } from "@/stores/use-project-store";
 import { useUiStore, type CenterView } from "@/stores/use-ui-store";
+import { useSidecarStore } from "@/stores/use-sidecar-store";
 import { formatBytes, formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -26,9 +30,17 @@ const STATUS_META: Record<SidecarStatus, { label: string; dot: string }> = {
 
 export function AppShell() {
   const { status, modelLoaded } = useSidecar();
+  const restartAttempt = useSidecarStore((s) => s.restartAttempt);
   const meta = STATUS_META[status];
   const model = useModelDownload();
   useAppUpdater();
+
+  const [appVersion, setAppVersion] = useState("");
+  useEffect(() => {
+    void getVersion()
+      .then(setAppVersion)
+      .catch(() => {});
+  }, []);
 
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const { data: projects = [] } = useProjects();
@@ -41,6 +53,8 @@ export function AppShell() {
   const selectedImageId = useUiStore((s) => s.selectedImageId);
   const setSelectedImage = useUiStore((s) => s.setSelectedImage);
   const lightboxOpen = useUiStore((s) => s.lightboxOpen);
+  const helpOpen = useUiStore((s) => s.helpOpen);
+  const setHelpOpen = useUiStore((s) => s.setHelpOpen);
 
   const { data: images = [] } = useImages(activeProjectId);
   const { data: costumes = [] } = useCostumes(activeProjectId);
@@ -61,8 +75,12 @@ export function AppShell() {
     (view === "costumes" || view === "setup");
   const styleSetupView =
     project != null && !isCharacter && view === "setup";
+  const statsView = project != null && view === "stats";
   const galleryView =
-    project != null && !costumesPanelView && !styleSetupView;
+    project != null &&
+    !costumesPanelView &&
+    !styleSetupView &&
+    !statsView;
 
   useKeyboardShortcuts({
     enabled: galleryView && !lightboxOpen,
@@ -72,16 +90,19 @@ export function AppShell() {
     selectedImageId,
     selectImage: setSelectedImage,
     patchImage: (id, patch) => updateImage.mutate({ id, patch }),
+    openHelp: () => setHelpOpen(true),
   });
 
   const tabs: [CenterView, string][] = isCharacter
     ? [
         ["gallery", "gallery"],
         ["costumes", "costumes"],
+        ["stats", "stats"],
       ]
     : [
         ["gallery", "gallery"],
         ["setup", "setup"],
+        ["stats", "stats"],
       ];
 
   return (
@@ -118,6 +139,8 @@ export function AppShell() {
               </div>
               {styleSetupView ? (
                 <StyleConceptBuilder project={project} />
+              ) : statsView ? (
+                <StatsPanel project={project} />
               ) : costumesPanelView ? (
                 <CostumesPanel project={project} />
               ) : (
@@ -167,6 +190,11 @@ export function AppShell() {
         <div className="flex items-center gap-2 px-4 py-1.5 text-[11px] text-muted-foreground">
           <span className={cn("size-2 rounded-full", meta.dot)} />
           <span>{meta.label}</span>
+          {restartAttempt > 0 && status !== "ready" && (
+            <span className="opacity-50">
+              · restarting ({restartAttempt}/3)
+            </span>
+          )}
           {status === "ready" &&
             !model.isDownloading &&
             !model.downloadedOk && (
@@ -179,10 +207,14 @@ export function AppShell() {
                 · model ready (loads on first tag)
               </span>
             )}
+          {appVersion && (
+            <span className="ml-auto opacity-60">v{appVersion}</span>
+          )}
         </div>
       </footer>
 
       <ModelDownloadPrompt />
+      <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
       <UpdateBanner />
     </div>
   );

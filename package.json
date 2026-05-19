@@ -1,14 +1,19 @@
 {
   "name": "dataset-organizer",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "build:sidecar": "node scripts/build-sidecar.mjs",
     "preview": "vite preview",
-    "tauri": "node scripts/tauri.mjs"
+    "tauri": "node scripts/tauri.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
@@ -35,12 +40,20 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@eslint/js": "^9",
     "@tauri-apps/cli": "^2",
     "@types/node": "^25.8.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "eslint": "^9",
+    "eslint-plugin-react-hooks": "^5",
+    "eslint-plugin-react-refresh": "^0.4",
+    "globals": "^15",
+    "prettier": "^3",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "typescript-eslint": "^8",
+    "vite": "^7.0.4",
+    "vitest": "^3"
   }
 }

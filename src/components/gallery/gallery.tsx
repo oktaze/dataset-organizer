@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   FolderOpen,
@@ -9,14 +15,21 @@ import {
   Check,
   Trash2,
   X,
+  Search,
+  MousePointerClick,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { ImageCell } from "@/components/gallery/image-cell";
 import { ImageLightbox } from "@/components/gallery/image-lightbox";
 import { ExportDialog } from "@/components/export/export-dialog";
 import { ReprocessDialog } from "@/components/reprocess/reprocess-dialog";
-import { useImages, useBulkImageActions } from "@/hooks/use-images";
+import {
+  useImages,
+  useBulkImageActions,
+  useUndo,
+} from "@/hooks/use-images";
 import { useCostumes } from "@/hooks/use-costumes";
 import { useImport } from "@/hooks/use-import";
 import { useUiStore } from "@/stores/use-ui-store";
@@ -39,16 +52,23 @@ interface GalleryProps {
 export function Gallery({ project }: GalleryProps) {
   const { data: images = [], isLoading } = useImages(project.id);
   const { data: costumes = [] } = useCostumes(project.id);
-  const { run, runFiles, running, progress, error } = useImport();
-  const bulk = useBulkImageActions(project.id);
+  const { run, runFiles, running, progress, error, skipped, skippedMsg } =
+    useImport();
+  const bulk = useBulkImageActions(project);
+  const undo = useUndo(project);
   const [exportOpen, setExportOpen] = useState(false);
   const [reprocessOpen, setReprocessOpen] = useState(false);
+  const [bulkTag, setBulkTag] = useState("");
 
   const [statusFilter, setStatusFilter] = useState<"all" | ImageStatus>(
     "all",
   );
+  const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
   const costumeFilter = useUiStore((s) => s.costumeFilter);
   const setCostumeFilter = useUiStore((s) => s.setCostumeFilter);
+  const selectMode = useUiStore((s) => s.selectMode);
+  const setSelectMode = useUiStore((s) => s.setSelectMode);
 
   const selectedImageId = useUiStore((s) => s.selectedImageId);
   const setSelectedImage = useUiStore((s) => s.setSelectedImage);
@@ -65,18 +85,32 @@ export function Gallery({ project }: GalleryProps) {
       id ? (map.get(id) ?? null) : null;
   }, [costumes]);
 
-  const visible = useMemo(
-    () =>
-      images.filter((img) => {
-        if (statusFilter !== "all" && img.status !== statusFilter) {
-          return false;
-        }
-        if (costumeFilter === "all") return true;
-        if (costumeFilter === "none") return img.costumeId == null;
-        return img.costumeId === costumeFilter;
-      }),
-    [images, statusFilter, costumeFilter],
-  );
+  const visible = useMemo(() => {
+    const q = deferredQuery.trim().toLowerCase();
+    return images.filter((img) => {
+      if (statusFilter !== "all" && img.status !== statusFilter) {
+        return false;
+      }
+      if (costumeFilter === "none" && img.costumeId != null) return false;
+      if (
+        costumeFilter !== "all" &&
+        costumeFilter !== "none" &&
+        img.costumeId !== costumeFilter
+      ) {
+        return false;
+      }
+      if (q !== "") {
+        const hay =
+          img.filename.toLowerCase() +
+          " " +
+          img.tagsFinal.join(" ").toLowerCase() +
+          " " +
+          (img.caption ?? "").toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [images, statusFilter, costumeFilter, deferredQuery]);
 
   const bulkSet = useMemo(() => new Set(bulkIds), [bulkIds]);
 
@@ -86,7 +120,19 @@ export function Gallery({ project }: GalleryProps) {
   useEffect(() => {
     clearBulk();
     setStatusFilter("all");
-  }, [project.id, clearBulk]);
+    setQuery("");
+    setSelectMode(false);
+  }, [project.id, clearBulk, setSelectMode]);
+
+  // Auto-dismiss the undo affordance after a short window. Depending on the
+  // whole `undo` object would re-arm the timer every render (it's rebuilt
+  // each time); the primitives below are the real triggers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!undo.hasUndo) return;
+    const t = setTimeout(() => undo.dismiss(), 10000);
+    return () => clearTimeout(t);
+  }, [undo.label, undo.hasUndo, undo.dismiss]);
 
   const anchor = useRef<number | null>(null);
   function onToggle(index: number, e: { shiftKey: boolean }) {
@@ -127,6 +173,14 @@ export function Gallery({ project }: GalleryProps) {
     if (!confirm(`Delete ${selCount} selected image(s)?`)) return;
     await bulk.remove.mutateAsync(bulkIds);
     clearBulk();
+  }
+
+  function applyBulkTag(kind: "add" | "remove") {
+    const t = bulkTag.trim();
+    if (t === "") return;
+    if (kind === "add") bulk.addTag.mutate({ ids: bulkIds, tag: t });
+    else bulk.removeTag.mutate({ ids: bulkIds, tag: t });
+    setBulkTag("");
   }
 
   return (
@@ -177,6 +231,15 @@ export function Gallery({ project }: GalleryProps) {
 
       {images.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-5 py-2">
+          <div className="relative">
+            <Search className="pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search filename / tag / caption…"
+              className="h-7 w-56 pl-7 text-xs"
+            />
+          </div>
           <Select
             value={statusFilter}
             onChange={(e) =>
@@ -207,6 +270,20 @@ export function Gallery({ project }: GalleryProps) {
               ))}
             </Select>
           )}
+
+          <Button
+            size="xs"
+            variant={selectMode ? "secondary" : "ghost"}
+            onClick={() => {
+              const next = !selectMode;
+              setSelectMode(next);
+              if (!next) clearBulk();
+            }}
+            title="Toggle selection mode — click images to select them"
+          >
+            <MousePointerClick className="size-3" />
+            {selectMode ? "Selecting" : "Select"}
+          </Button>
 
           <Button
             size="xs"
@@ -242,6 +319,43 @@ export function Gallery({ project }: GalleryProps) {
                 }
               >
                 Mark tagged
+              </Button>
+              <Input
+                value={bulkTag}
+                onChange={(e) => setBulkTag(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applyBulkTag("add");
+                }}
+                placeholder="tag…"
+                className="h-6 w-28 text-xs"
+              />
+              <Button
+                size="xs"
+                variant="secondary"
+                onClick={() => applyBulkTag("add")}
+                disabled={bulkTag.trim() === ""}
+              >
+                + Tag
+              </Button>
+              <Button
+                size="xs"
+                variant="secondary"
+                onClick={() => applyBulkTag("remove")}
+                disabled={bulkTag.trim() === ""}
+              >
+                − Tag
+              </Button>
+              <Button
+                size="xs"
+                variant="secondary"
+                onClick={() => bulk.rebuildCaptions.mutate(bulkIds)}
+                disabled={bulk.rebuildCaptions.isPending}
+                title="Reassemble captions from current tags & costume"
+              >
+                {bulk.rebuildCaptions.isPending ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : null}
+                Rebuild captions
               </Button>
               {isCharacter && (
                 <Select
@@ -319,6 +433,35 @@ export function Gallery({ project }: GalleryProps) {
           {error}
         </p>
       )}
+      {skippedMsg && (
+        <p
+          className="border-b border-border bg-amber-500/10 px-5 py-1.5 text-[11px] text-amber-500"
+          title={skipped.join("\n")}
+        >
+          {skippedMsg}
+        </p>
+      )}
+      {undo.hasUndo && undo.label && (
+        <div className="flex items-center gap-3 border-b border-border bg-primary/10 px-5 py-1.5 text-[11px] text-foreground">
+          <span className="flex-1 truncate">{undo.label}</span>
+          <button
+            type="button"
+            onClick={() => undo.undo.mutate()}
+            disabled={undo.undo.isPending}
+            className="font-medium text-primary hover:underline disabled:opacity-50"
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            onClick={() => undo.dismiss()}
+            aria-label="Dismiss"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-3" />
+          </button>
+        </div>
+      )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
         {isLoading ? (
@@ -368,6 +511,7 @@ export function Gallery({ project }: GalleryProps) {
                       costumeName={costumeName(img.costumeId)}
                       selected={img.id === selectedImageId}
                       checked={bulkSet.has(img.id)}
+                      selectMode={selectMode}
                       onSelect={() => setSelectedImage(img.id)}
                       onToggle={(e) => onToggle(start + idx, e)}
                       onOpen={() => openLightbox(img.id)}

@@ -2,6 +2,7 @@
  *  The frontend owns all business logic (per CLAUDE.md). */
 
 import { tauri } from "@/lib/tauri";
+import { ciKey } from "@/lib/tag-key";
 import type {
   ConstantTag,
   Costume,
@@ -320,6 +321,78 @@ export const imagesDb = {
       `UPDATE images SET status = 'exported' WHERE id IN (${placeholders})`,
       ids,
     );
+  },
+
+  /** Add `tag` to `tags_final` of every listed image (case-insensitive
+   *  de-dup). Read-modify-write per row since `tags_final` is JSON-as-TEXT —
+   *  business logic stays in the frontend (per CLAUDE.md). */
+  async addTagMany(ids: string[], tag: string): Promise<void> {
+    const t = tag.trim();
+    if (ids.length === 0 || t === "") return;
+    const ph = ids.map(() => "?").join(", ");
+    const rows = await tauri.dbQuery<Row>(
+      `SELECT id, tags_final FROM images WHERE id IN (${ph})`,
+      ids,
+    );
+    const k = ciKey(t);
+    for (const r of rows) {
+      const cur = parseJson<string[]>(r.tags_final, []);
+      if (cur.some((x) => ciKey(x) === k)) continue;
+      await tauri.dbExecute(
+        "UPDATE images SET tags_final = ? WHERE id = ?",
+        [JSON.stringify([...cur, t]), str(r.id)],
+      );
+    }
+  },
+
+  /** Remove `tag` (case-insensitive) from `tags_final` of every listed
+   *  image. */
+  async removeTagMany(ids: string[], tag: string): Promise<void> {
+    const t = tag.trim();
+    if (ids.length === 0 || t === "") return;
+    const ph = ids.map(() => "?").join(", ");
+    const rows = await tauri.dbQuery<Row>(
+      `SELECT id, tags_final FROM images WHERE id IN (${ph})`,
+      ids,
+    );
+    const k = ciKey(t);
+    for (const r of rows) {
+      const cur = parseJson<string[]>(r.tags_final, []);
+      const next = cur.filter((x) => ciKey(x) !== k);
+      if (next.length === cur.length) continue;
+      await tauri.dbExecute(
+        "UPDATE images SET tags_final = ? WHERE id = ?",
+        [JSON.stringify(next), str(r.id)],
+      );
+    }
+  },
+
+  /** Re-insert full image rows (preserving id + created_at), overwriting any
+   *  current row. Used by single-level Undo to restore bulk edits/deletes. */
+  async insertRestore(rows: ImageItem[]): Promise<void> {
+    for (const img of rows) {
+      await tauri.dbExecute(
+        `INSERT OR REPLACE INTO images
+           (id, project_id, costume_id, filename, filepath, width, height,
+            tags_auto, tags_final, caption, costume_score, status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          img.id,
+          img.projectId,
+          img.costumeId,
+          img.filename,
+          img.filepath,
+          img.width,
+          img.height,
+          JSON.stringify(img.tagsAuto),
+          JSON.stringify(img.tagsFinal),
+          img.caption,
+          JSON.stringify(img.costumeScore),
+          img.status,
+          img.createdAt,
+        ],
+      );
+    }
   },
 
   async setStatusMany(ids: string[], status: ImageStatus): Promise<void> {

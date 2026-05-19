@@ -1,0 +1,40 @@
+name: test
+
+# Lint + tests on every push / PR. Kept separate from release.yml (which is
+# tag-triggered and only builds/signs) so regressions surface before a tag.
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Pure modules only — conftest stubs `tagger`, so no onnxruntime here.
+      - name: Install test deps
+        run: pip install -r sidecar/requirements-dev.txt
+      - name: Ruff
+        run: ruff check sidecar
+      - name: Pytest
+        working-directory: sidecar
+        run: pytest -q
+
+  frontend:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # pnpm 11 needs Node >= 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm build # tsc typecheck + vite build

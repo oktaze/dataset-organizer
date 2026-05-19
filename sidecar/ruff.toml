@@ -1,0 +1,9 @@
+target-version = "py312"
+line-length = 88
+exclude = [".venv", "models", "build", "__pycache__"]
+
+# E/F/I only: real bugs + import order. `UP` (pyupgrade) is intentionally
+# left out — it would rewrite the existing `Optional[...]` style across
+# untouched modules, which is out of scope here.
+[lint]
+select = ["E", "F", "I"]
