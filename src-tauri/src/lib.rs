@@ -45,6 +45,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::filesystem::read_images_from_dir,
+            commands::filesystem::read_images_meta,
             commands::filesystem::write_caption_file,
             commands::filesystem::get_image_thumbnail,
             commands::filesystem::export_dataset,

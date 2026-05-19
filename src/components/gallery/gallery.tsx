@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   FolderOpen,
+  Images,
   Loader2,
   Download,
   Tags,
@@ -38,7 +39,7 @@ interface GalleryProps {
 export function Gallery({ project }: GalleryProps) {
   const { data: images = [], isLoading } = useImages(project.id);
   const { data: costumes = [] } = useCostumes(project.id);
-  const { run, running, progress, error } = useImport();
+  const { run, runFiles, running, progress, error } = useImport();
   const bulk = useBulkImageActions(project.id);
   const [exportOpen, setExportOpen] = useState(false);
   const [reprocessOpen, setReprocessOpen] = useState(false);
@@ -155,6 +156,14 @@ export function Gallery({ project }: GalleryProps) {
         >
           <Download className="size-3.5" />
           Export
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => void runFiles(project)}
+          disabled={running}
+        >
+          <Images className="size-3.5" />
+          Import files
         </Button>
         <Button onClick={() => void run(project)} disabled={running}>
           {running ? (
@@ -320,7 +329,7 @@ export function Gallery({ project }: GalleryProps) {
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <p className="text-sm text-foreground">No images yet</p>
             <p className="text-xs text-muted-foreground">
-              Import a folder to scan, tag and caption a dataset.
+              Import a folder or files to scan, tag and caption a dataset.
             </p>
           </div>
         ) : visible.length === 0 ? (

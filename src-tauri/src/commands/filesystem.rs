@@ -30,8 +30,36 @@ where
         .map_err(|e| e.to_string())?
 }
 
+/// Metadata for a single path, or `None` if it is not a readable image
+/// (wrong extension, not a file, corrupt header). Dimensions are read from
+/// the header only (fast, no full decode).
+fn meta_for_file(p: &Path) -> Option<ImageMeta> {
+    if !p.is_file() {
+        return None;
+    }
+    let ext_ok = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| IMAGE_EXTS.contains(&e.to_lowercase().as_str()))
+        .unwrap_or(false);
+    if !ext_ok {
+        return None;
+    }
+    let (width, height) = image::image_dimensions(p).ok()?;
+    let filename = p
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default()
+        .to_string();
+    Some(ImageMeta {
+        filename,
+        filepath: p.to_string_lossy().to_string(),
+        width,
+        height,
+    })
+}
+
 /// Enumerate image files in `path`, returning metadata + dimensions.
-/// Dimensions are read from the header only (fast, no full decode).
 /// Unreadable/corrupt files are skipped, not fatal.
 #[tauri::command]
 pub async fn read_images_from_dir(path: String) -> Result<Vec<ImageMeta>, String> {
@@ -39,36 +67,27 @@ pub async fn read_images_from_dir(path: String) -> Result<Vec<ImageMeta>, String
         let entries = std::fs::read_dir(&path)
             .map_err(|e| format!("read_dir {path}: {e}"))?;
 
-        let mut images: Vec<ImageMeta> = Vec::new();
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if !p.is_file() {
-                continue;
-            }
-            let ext_ok = p
-                .extension()
-                .and_then(|e| e.to_str())
-                .map(|e| IMAGE_EXTS.contains(&e.to_lowercase().as_str()))
-                .unwrap_or(false);
-            if !ext_ok {
-                continue;
-            }
-            let (width, height) = match image::image_dimensions(&p) {
-                Ok(d) => d,
-                Err(_) => continue,
-            };
-            let filename = p
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or_default()
-                .to_string();
-            images.push(ImageMeta {
-                filename,
-                filepath: p.to_string_lossy().to_string(),
-                width,
-                height,
-            });
-        }
+        let mut images: Vec<ImageMeta> = entries
+            .flatten()
+            .filter_map(|entry| meta_for_file(&entry.path()))
+            .collect();
+
+        images.sort_by(|a, b| a.filename.cmp(&b.filename));
+        Ok(images)
+    })
+    .await
+}
+
+/// Metadata for an explicit list of image file paths (multi-file import,
+/// possibly spanning different folders). Non-images / corrupt files are
+/// skipped, not fatal — mirrors `read_images_from_dir`.
+#[tauri::command]
+pub async fn read_images_meta(paths: Vec<String>) -> Result<Vec<ImageMeta>, String> {
+    blocking(move || {
+        let mut images: Vec<ImageMeta> = paths
+            .iter()
+            .filter_map(|s| meta_for_file(Path::new(s)))
+            .collect();
 
         images.sort_by(|a, b| a.filename.cmp(&b.filename));
         Ok(images)

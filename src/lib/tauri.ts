@@ -22,6 +22,9 @@ export const tauri = {
   readImagesFromDir: (path: string): Promise<ImageMeta[]> =>
     invoke<ImageMeta[]>("read_images_from_dir", { path }),
 
+  readImagesMeta: (paths: string[]): Promise<ImageMeta[]> =>
+    invoke<ImageMeta[]>("read_images_meta", { paths }),
+
   writeCaptionFile: (imagePath: string, caption: string): Promise<void> =>
     invoke<void>("write_caption_file", { imagePath, caption }),
 
