@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type CenterView = "gallery" | "costumes" | "setup";
+export type CenterView = "gallery" | "costumes" | "setup" | "stats";
 
 interface UiState {
   view: CenterView;
@@ -10,6 +10,11 @@ interface UiState {
   lightboxOpen: boolean;
   /** Bulk-review multi-selection. */
   bulkIds: string[];
+  /** When on, gallery checkboxes are always shown and a plain click on an
+   *  image toggles its selection instead of focusing the tag editor. */
+  selectMode: boolean;
+  /** Keyboard-shortcuts help overlay. */
+  helpOpen: boolean;
   /** Gallery costume filter: "all" | "none" | costumeId. Lifted here so the
    *  by-costume overview can drill into the gallery pre-filtered. */
   costumeFilter: string;
@@ -21,6 +26,8 @@ interface UiState {
   setBulk: (ids: string[]) => void;
   toggleBulk: (id: string) => void;
   clearBulk: () => void;
+  setSelectMode: (on: boolean) => void;
+  setHelpOpen: (open: boolean) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -28,6 +35,8 @@ export const useUiStore = create<UiState>((set) => ({
   selectedImageId: null,
   lightboxOpen: false,
   bulkIds: [],
+  selectMode: false,
+  helpOpen: false,
   costumeFilter: "all",
   setView: (view) => set({ view }),
   setCostumeFilter: (costumeFilter) => set({ costumeFilter }),
@@ -42,4 +51,6 @@ export const useUiStore = create<UiState>((set) => ({
         : [...s.bulkIds, id],
     })),
   clearBulk: () => set({ bulkIds: [] }),
+  setSelectMode: (selectMode) => set({ selectMode }),
+  setHelpOpen: (helpOpen) => set({ helpOpen }),
 }));

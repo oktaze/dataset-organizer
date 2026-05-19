@@ -66,7 +66,18 @@ CREATE TABLE IF NOT EXISTS project_tags (
 );
 "#;
 
-/// Open the DB in the app data dir and run idempotent migrations.
+/// Schema migrations, applied in order. Index `i` is schema version `i + 1`
+/// and runs only when the DB's `PRAGMA user_version` is below it. The v1
+/// baseline is the full `CREATE TABLE IF NOT EXISTS` schema, idempotent so
+/// pre-versioning installs (`user_version = 0`) upgrade cleanly. Future
+/// schema changes append a new self-contained DDL string here — never edit
+/// or reorder existing entries.
+const MIGRATIONS: &[&str] = &[
+    // v1 — baseline schema.
+    SCHEMA,
+];
+
+/// Open the DB in the app data dir and run pending versioned migrations.
 pub fn init(app: &AppHandle) -> Result<Connection, String> {
     let dir = app
         .path()
@@ -75,7 +86,22 @@ pub fn init(app: &AppHandle) -> Result<Connection, String> {
     std::fs::create_dir_all(&dir).map_err(|e| format!("create_dir_all: {e}"))?;
     let db_path = dir.join("dataset-organizer.db");
     let conn = Connection::open(&db_path).map_err(|e| format!("open db: {e}"))?;
-    conn.execute_batch(SCHEMA).map_err(|e| format!("migrate: {e}"))?;
+
+    let mut version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .map_err(|e| format!("read user_version: {e}"))?;
+    for (i, sql) in MIGRATIONS.iter().enumerate() {
+        let target = (i + 1) as i64;
+        if version < target {
+            conn.execute_batch(sql)
+                .map_err(|e| format!("migrate v{target}: {e}"))?;
+            // `PRAGMA user_version =` cannot be parameterized; `target` is a
+            // loop-derived integer, so the format! is injection-safe.
+            conn.execute_batch(&format!("PRAGMA user_version = {target}"))
+                .map_err(|e| format!("set user_version {target}: {e}"))?;
+            version = target;
+        }
+    }
     Ok(conn)
 }
 

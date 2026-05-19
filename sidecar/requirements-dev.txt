@@ -1,0 +1,6 @@
+# Test-only deps. Kept out of requirements.txt / requirements-build.txt so
+# the frozen sidecar binary stays lean. The pure modules under test
+# (caption, tag_format, costume_matcher) need no runtime deps — conftest
+# stubs `tagger`, so onnxruntime is never imported.
+pytest==8.3.4
+ruff==0.8.6

@@ -7,6 +7,12 @@ export interface ImageMeta {
   height: number;
 }
 
+export interface ImportResult {
+  images: ImageMeta[];
+  /** Paths that looked like images but could not be decoded. */
+  skipped: string[];
+}
+
 export interface ExportItem {
   source_path: string;
   target_name: string;
@@ -19,11 +25,11 @@ export interface ExportItem {
  * JS keys to the snake_case Rust parameter names automatically.
  */
 export const tauri = {
-  readImagesFromDir: (path: string): Promise<ImageMeta[]> =>
-    invoke<ImageMeta[]>("read_images_from_dir", { path }),
+  readImagesFromDir: (path: string): Promise<ImportResult> =>
+    invoke<ImportResult>("read_images_from_dir", { path }),
 
-  readImagesMeta: (paths: string[]): Promise<ImageMeta[]> =>
-    invoke<ImageMeta[]>("read_images_meta", { paths }),
+  readImagesMeta: (paths: string[]): Promise<ImportResult> =>
+    invoke<ImportResult>("read_images_meta", { paths }),
 
   writeCaptionFile: (imagePath: string, caption: string): Promise<void> =>
     invoke<void>("write_caption_file", { imagePath, caption }),

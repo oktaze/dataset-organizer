@@ -25,6 +25,12 @@ export function useImport() {
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [skipped, setSkipped] = useState<string[]>([]);
+
+  const skippedMsg =
+    skipped.length === 0
+      ? null
+      : `${skipped.length} file${skipped.length === 1 ? "" : "s"} skipped (unreadable / corrupt)`;
 
   /** De-dup against already-imported paths and insert the fresh ones. */
   async function addMetas(
@@ -58,16 +64,18 @@ export function useImport() {
   /** Folder import: scan every image in the chosen directory. */
   async function run(project: Project) {
     setError(null);
+    setSkipped([]);
     const dir = await open({ directory: true, multiple: false });
     if (typeof dir !== "string") return;
 
     setRunning(true);
     try {
       setProgress({ phase: "Scanning folder", done: 0, total: 0 });
-      const metas = await tauri.readImagesFromDir(dir);
+      const { images, skipped: skip } = await tauri.readImagesFromDir(dir);
+      setSkipped(skip);
       await addMetas(
         project,
-        metas,
+        images,
         "No images found in that folder.",
         "All images already imported.",
       );
@@ -83,6 +91,7 @@ export function useImport() {
    *  folders — the OS picker is usually limited to one folder per call). */
   async function runFiles(project: Project) {
     setError(null);
+    setSkipped([]);
     const sel = await open({
       multiple: true,
       filters: [{ name: "Images", extensions: IMAGE_EXTS }],
@@ -92,10 +101,11 @@ export function useImport() {
     setRunning(true);
     try {
       setProgress({ phase: "Reading files", done: 0, total: 0 });
-      const metas = await tauri.readImagesMeta(sel);
+      const { images, skipped: skip } = await tauri.readImagesMeta(sel);
+      setSkipped(skip);
       await addMetas(
         project,
-        metas,
+        images,
         "No valid images selected.",
         "All selected images already imported.",
       );
@@ -107,5 +117,5 @@ export function useImport() {
     }
   }
 
-  return { run, runFiles, running, progress, error };
+  return { run, runFiles, running, progress, error, skipped, skippedMsg };
 }

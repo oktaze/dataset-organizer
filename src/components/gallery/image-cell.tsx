@@ -19,6 +19,9 @@ interface ImageCellProps {
   selected: boolean;
   /** In the bulk-review multi-selection. */
   checked: boolean;
+  /** Selection mode: a plain click toggles selection (vs. focusing) and the
+   *  checkbox is always visible. */
+  selectMode: boolean;
   onSelect: () => void;
   onToggle: (e: MouseEvent) => void;
   /** Open the full-screen preview for this image. */
@@ -30,6 +33,7 @@ export function ImageCell({
   costumeName,
   selected,
   checked,
+  selectMode,
   onSelect,
   onToggle,
   onOpen,
@@ -40,7 +44,7 @@ export function ImageCell({
     <div
       role="button"
       tabIndex={0}
-      onClick={onSelect}
+      onClick={(e) => (selectMode ? onToggle(e) : onSelect())}
       onDoubleClick={onOpen}
       onKeyDown={(e) => {
         if (e.key === "Enter") onSelect();
@@ -49,7 +53,11 @@ export function ImageCell({
           onOpen();
         }
       }}
-      title={`${image.filename} — double-click to enlarge`}
+      title={
+        selectMode
+          ? `${image.filename} — click to select`
+          : `${image.filename} — double-click to enlarge`
+      }
       className={cn(
         "group relative flex cursor-pointer flex-col overflow-hidden rounded-lg border bg-card text-left outline-none transition-colors",
         selected
@@ -92,7 +100,12 @@ export function ImageCell({
             "absolute top-1.5 left-1.5 grid size-4 place-items-center rounded border transition-colors",
             checked
               ? "border-primary bg-primary text-primary-foreground"
-              : "border-white/60 bg-black/40 text-transparent opacity-0 group-hover:opacity-100",
+              : cn(
+                  "border-white/60 bg-black/40 text-transparent",
+                  selectMode
+                    ? "opacity-100"
+                    : "opacity-0 group-hover:opacity-100",
+                ),
           )}
         >
           <Check className="size-3" />

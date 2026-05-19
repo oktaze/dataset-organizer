@@ -17,6 +17,7 @@ import {
   getExistingPolicy,
   type ExistingPolicy,
 } from "@/stores/use-settings-store";
+import { ciKey, dedupeNames } from "@/lib/tag-key";
 import type { Costume, ImageItem, Project, TagScore } from "@/lib/types";
 
 export interface PipelineCtx {
@@ -63,21 +64,6 @@ export async function makePipelineCtx(project: Project): Promise<PipelineCtx> {
     appendTags: getAppendTags(project.id),
     existingPolicy: getExistingPolicy(project.id),
   };
-}
-
-const ciKey = (s: string): string => s.trim().toLowerCase();
-
-/** Case-insensitive de-dup of tag names, first occurrence wins. */
-function dedupeNames(names: string[]): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const n of names) {
-    const k = ciKey(n);
-    if (!k || seen.has(k)) continue;
-    seen.add(k);
-    out.push(n);
-  }
-  return out;
 }
 
 /** Union of TagScore lists; existing entries win on collision. */

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Trash2, Settings } from "lucide-react";
+import { Plus, Trash2, Settings, Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { NewProjectDialog } from "@/components/projects/new-project-dialog";
@@ -18,6 +18,7 @@ export function ProjectSidebar() {
   const activeProjectId = useProjectStore((s) => s.activeProjectId);
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
   const setSelectedImage = useUiStore((s) => s.setSelectedImage);
+  const setHelpOpen = useUiStore((s) => s.setHelpOpen);
 
   function select(id: string) {
     setActiveProject(id);
@@ -36,14 +37,25 @@ export function ProjectSidebar() {
         <h1 className="text-sm font-semibold tracking-tight text-sidebar-foreground">
           Dataset Organizer
         </h1>
-        <button
-          type="button"
-          onClick={() => setSettingsOpen(true)}
-          className="rounded p-1 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
-          aria-label="Settings"
-        >
-          <Settings className="size-3.5" />
-        </button>
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={() => setHelpOpen(true)}
+            className="rounded p-1 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts (?)"
+          >
+            <Keyboard className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="rounded p-1 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            aria-label="Settings"
+          >
+            <Settings className="size-3.5" />
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between px-4 py-3">

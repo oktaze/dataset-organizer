@@ -16,14 +16,15 @@ try:
 except Exception:
     pass
 
-import caption
-import costume_matcher
-import tagger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-app = FastAPI(title="Dataset Organizer Sidecar", version="0.3.1")
+import caption
+import costume_matcher
+import tagger
+
+app = FastAPI(title="Dataset Organizer Sidecar", version="0.4.0")
 
 # The Tauri webview (http://localhost:1420 in dev, tauri://localhost in prod)
 # is a different origin than this 127.0.0.1 sidecar. Allow all origins —

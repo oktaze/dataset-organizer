@@ -7,8 +7,10 @@
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
 use std::io::{Cursor, Write};
 use std::path::Path;
+use tauri::Manager;
 
 #[derive(Serialize)]
 pub struct ImageMeta {
@@ -18,7 +20,22 @@ pub struct ImageMeta {
     pub height: u32,
 }
 
+/// Result of an import scan: readable images plus the paths that *looked*
+/// like images but could not be decoded, so the UI can tell the user.
+#[derive(Serialize)]
+pub struct ImportResult {
+    pub images: Vec<ImageMeta>,
+    pub skipped: Vec<String>,
+}
+
 const IMAGE_EXTS: &[&str] = &["jpg", "jpeg", "png", "webp", "bmp", "gif"];
+
+fn has_image_ext(p: &Path) -> bool {
+    p.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| IMAGE_EXTS.contains(&e.to_lowercase().as_str()))
+        .unwrap_or(false)
+}
 
 async fn blocking<T, F>(f: F) -> Result<T, String>
 where
@@ -30,19 +47,42 @@ where
         .map_err(|e| e.to_string())?
 }
 
+/// Write `bytes` to `target` atomically: write a sibling temp file in the
+/// **same directory**, then `rename` over the target. `rename` is atomic
+/// within a filesystem and replaces an existing file on both Unix and
+/// Windows, so a crash mid-write never leaves a half-written caption.
+fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), String> {
+    let dir = target.parent().unwrap_or_else(|| Path::new("."));
+    let stem = target
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("file");
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = dir.join(format!(
+        ".{stem}.{}.{nanos}.tmp",
+        std::process::id()
+    ));
+    std::fs::write(&tmp, bytes)
+        .map_err(|e| format!("write {}: {e}", tmp.display()))?;
+    if let Err(e) = std::fs::rename(&tmp, target) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!(
+            "rename {} -> {}: {e}",
+            tmp.display(),
+            target.display()
+        ));
+    }
+    Ok(())
+}
+
 /// Metadata for a single path, or `None` if it is not a readable image
 /// (wrong extension, not a file, corrupt header). Dimensions are read from
 /// the header only (fast, no full decode).
 fn meta_for_file(p: &Path) -> Option<ImageMeta> {
-    if !p.is_file() {
-        return None;
-    }
-    let ext_ok = p
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| IMAGE_EXTS.contains(&e.to_lowercase().as_str()))
-        .unwrap_or(false);
-    if !ext_ok {
+    if !p.is_file() || !has_image_ext(p) {
         return None;
     }
     let (width, height) = image::image_dimensions(p).ok()?;
@@ -60,50 +100,105 @@ fn meta_for_file(p: &Path) -> Option<ImageMeta> {
 }
 
 /// Enumerate image files in `path`, returning metadata + dimensions.
-/// Unreadable/corrupt files are skipped, not fatal.
+/// Files that look like images but fail to decode are reported in
+/// `skipped` (not fatal); unrelated files in the folder are ignored.
 #[tauri::command]
-pub async fn read_images_from_dir(path: String) -> Result<Vec<ImageMeta>, String> {
+pub async fn read_images_from_dir(path: String) -> Result<ImportResult, String> {
     blocking(move || {
         let entries = std::fs::read_dir(&path)
             .map_err(|e| format!("read_dir {path}: {e}"))?;
 
-        let mut images: Vec<ImageMeta> = entries
-            .flatten()
-            .filter_map(|entry| meta_for_file(&entry.path()))
-            .collect();
+        let mut images: Vec<ImageMeta> = Vec::new();
+        let mut skipped: Vec<String> = Vec::new();
+        for entry in entries.flatten() {
+            let p = entry.path();
+            match meta_for_file(&p) {
+                Some(m) => images.push(m),
+                // Only report files that look like images but failed to
+                // decode — not every unrelated file in the folder.
+                None if p.is_file() && has_image_ext(&p) => {
+                    skipped.push(p.to_string_lossy().to_string());
+                }
+                None => {}
+            }
+        }
 
         images.sort_by(|a, b| a.filename.cmp(&b.filename));
-        Ok(images)
+        skipped.sort();
+        Ok(ImportResult { images, skipped })
     })
     .await
 }
 
 /// Metadata for an explicit list of image file paths (multi-file import,
-/// possibly spanning different folders). Non-images / corrupt files are
-/// skipped, not fatal — mirrors `read_images_from_dir`.
+/// possibly spanning different folders). Any hand-picked path that cannot
+/// be decoded is reported in `skipped` — mirrors `read_images_from_dir`.
 #[tauri::command]
-pub async fn read_images_meta(paths: Vec<String>) -> Result<Vec<ImageMeta>, String> {
+pub async fn read_images_meta(paths: Vec<String>) -> Result<ImportResult, String> {
     blocking(move || {
-        let mut images: Vec<ImageMeta> = paths
-            .iter()
-            .filter_map(|s| meta_for_file(Path::new(s)))
-            .collect();
+        let mut images: Vec<ImageMeta> = Vec::new();
+        let mut skipped: Vec<String> = Vec::new();
+        for s in &paths {
+            match meta_for_file(Path::new(s)) {
+                Some(m) => images.push(m),
+                None => skipped.push(s.clone()),
+            }
+        }
 
         images.sort_by(|a, b| a.filename.cmp(&b.filename));
-        Ok(images)
+        Ok(ImportResult { images, skipped })
     })
     .await
 }
 
 /// Decode an image, downscale to fit `max` px (aspect preserved) and return
 /// a `data:image/jpeg;base64,...` URL for use as a gallery thumbnail.
+///
+/// Results are cached on disk under `<app_data>/thumb-cache`, keyed by
+/// path + file size + mtime + `max`, so re-scrolling the gallery (or
+/// restarting the app) skips the expensive full decode. Any edit to the
+/// source file changes its size/mtime and invalidates the entry. `app` is
+/// injected by Tauri — the JS signature is unchanged.
 #[tauri::command]
 pub async fn get_image_thumbnail(
+    app: tauri::AppHandle,
     path: String,
     max: Option<u32>,
 ) -> Result<String, String> {
     blocking(move || {
         let size = max.unwrap_or(200);
+
+        let cache_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("app_data_dir: {e}"))?
+            .join("thumb-cache");
+
+        let meta = std::fs::metadata(&path)
+            .map_err(|e| format!("stat {path}: {e}"))?;
+        let mtime = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        path.hash(&mut hasher);
+        meta.len().hash(&mut hasher);
+        mtime.hash(&mut hasher);
+        size.hash(&mut hasher);
+        let cache_file =
+            cache_dir.join(format!("{:016x}.jpg", hasher.finish()));
+
+        let encode = |bytes: &[u8]| {
+            let b64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+            format!("data:image/jpeg;base64,{b64}")
+        };
+
+        if let Ok(cached) = std::fs::read(&cache_file) {
+            return Ok(encode(&cached));
+        }
+
         let img = image::ImageReader::open(&path)
             .map_err(|e| format!("open {path}: {e}"))?
             .with_guessed_format()
@@ -126,8 +221,12 @@ pub async fn get_image_thumbnail(
         )
         .map_err(|e| format!("encode: {e}"))?;
 
-        let b64 = base64::engine::general_purpose::STANDARD.encode(&buf);
-        Ok(format!("data:image/jpeg;base64,{b64}"))
+        // Best-effort cache write: a failure here must not fail the request.
+        if std::fs::create_dir_all(&cache_dir).is_ok() {
+            let _ = write_atomic(&cache_file, &buf);
+        }
+
+        Ok(encode(&buf))
     })
     .await
 }
@@ -141,8 +240,7 @@ pub async fn write_caption_file(
 ) -> Result<(), String> {
     blocking(move || {
         let txt_path = Path::new(&image_path).with_extension("txt");
-        std::fs::write(&txt_path, caption)
-            .map_err(|e| format!("write {}: {e}", txt_path.display()))
+        write_atomic(&txt_path, caption.as_bytes())
     })
     .await
 }
@@ -238,8 +336,7 @@ pub async fn export_dataset(
             std::fs::copy(&it.source_path, &img_path).map_err(|e| {
                 format!("copy {} -> {}: {e}", it.source_path, img_path.display())
             })?;
-            std::fs::write(&txt_path, &it.caption)
-                .map_err(|e| format!("write {}: {e}", txt_path.display()))?;
+            write_atomic(&txt_path, it.caption.as_bytes())?;
 
             count += 1;
         }

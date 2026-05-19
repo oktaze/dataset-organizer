@@ -1,6 +1,15 @@
 import { useEffect, useRef } from "react";
 import type { Costume, ImageItem, ImageStatus } from "@/lib/types";
 
+/** Single source of truth for the shortcuts shown in the help overlay. */
+export const SHORTCUTS: { keys: string; desc: string }[] = [
+  { keys: "A / ←", desc: "Previous image" },
+  { keys: "D / →", desc: "Next image" },
+  { keys: "V", desc: "Toggle validated" },
+  { keys: "1–9", desc: "Assign costume (character)" },
+  { keys: "?", desc: "Show this help" },
+];
+
 interface ShortcutContext {
   enabled: boolean;
   isCharacter: boolean;
@@ -12,6 +21,8 @@ interface ShortcutContext {
     id: string,
     patch: { costumeId?: string | null; status?: ImageStatus },
   ) => void;
+  /** Open the keyboard-shortcuts help overlay (works app-wide). */
+  openHelp: () => void;
 }
 
 function isTypingTarget(el: EventTarget | null): boolean {
@@ -34,7 +45,16 @@ export function useKeyboardShortcuts(ctx: ShortcutContext) {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const c = ref.current;
-      if (!c.enabled || isTypingTarget(e.target)) return;
+      if (isTypingTarget(e.target)) return;
+
+      // Help overlay works app-wide, not just in the gallery.
+      if (e.key === "?") {
+        e.preventDefault();
+        c.openHelp();
+        return;
+      }
+
+      if (!c.enabled) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
       const { images, selectedImageId } = c;
