@@ -41,6 +41,23 @@ export const tauri = {
   writeCaptionFile: (imagePath: string, caption: string): Promise<void> =>
     invoke<void>("write_caption_file", { imagePath, caption }),
 
+  /** Copy an imported image into the app-managed library. Returns the
+   *  managed absolute path (or the input unchanged if already inside it). */
+  importIntoLibrary: (
+    projectId: string,
+    imageId: string,
+    sourcePath: string,
+  ): Promise<string> =>
+    invoke<string>("import_into_library", {
+      projectId,
+      imageId,
+      sourcePath,
+    }),
+
+  /** Delete a project's entire managed library folder (post project delete). */
+  removeLibraryProject: (projectId: string): Promise<void> =>
+    invoke<void>("remove_library_project", { projectId }),
+
   getImageThumbnail: (path: string, max?: number): Promise<string> =>
     invoke<string>("get_image_thumbnail", { path, max }),
 

@@ -78,6 +78,35 @@ fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+/// Copy `src` to `dest` atomically: copy into a sibling temp file in the
+/// **same directory** as `dest`, then `rename` over it (same guarantee as
+/// `write_atomic` — a crash mid-copy never leaves a half-written image in
+/// the library). Errors if `src` is missing/unreadable.
+fn copy_atomic(src: &Path, dest: &Path) -> Result<(), String> {
+    let dir = dest.parent().unwrap_or_else(|| Path::new("."));
+    let stem = dest
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("file");
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let tmp = dir.join(format!(".{stem}.{}.{nanos}.tmp", std::process::id()));
+    std::fs::copy(src, &tmp).map_err(|e| {
+        format!("copy {} -> {}: {e}", src.display(), tmp.display())
+    })?;
+    if let Err(e) = std::fs::rename(&tmp, dest) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!(
+            "rename {} -> {}: {e}",
+            tmp.display(),
+            dest.display()
+        ));
+    }
+    Ok(())
+}
+
 /// Metadata for a single path, or `None` if it is not a readable image
 /// (wrong extension, not a file, corrupt header). Dimensions are read from
 /// the header only (fast, no full decode).
@@ -241,6 +270,74 @@ pub async fn write_caption_file(
     blocking(move || {
         let txt_path = Path::new(&image_path).with_extension("txt");
         write_atomic(&txt_path, caption.as_bytes())
+    })
+    .await
+}
+
+/// Copy an imported image into the app-managed library so the dataset no
+/// longer depends on the user's source folder. Layout:
+/// `<app_data>/library/<project_id>/<image_id>.<ext>` (filename = the image
+/// row's UUID → no collisions, trivial to locate/delete by row).
+///
+/// Idempotent: if `source_path` is already inside this project's library
+/// dir, it is returned unchanged (safe to re-run for the legacy migration).
+/// Errors if the source is missing/unreadable — callers skip those.
+#[tauri::command]
+pub async fn import_into_library(
+    app: tauri::AppHandle,
+    project_id: String,
+    image_id: String,
+    source_path: String,
+) -> Result<String, String> {
+    blocking(move || {
+        let lib_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("app_data_dir: {e}"))?
+            .join("library")
+            .join(&project_id);
+
+        let src = Path::new(&source_path);
+        if src.starts_with(&lib_dir) {
+            return Ok(source_path);
+        }
+
+        std::fs::create_dir_all(&lib_dir)
+            .map_err(|e| format!("create {}: {e}", lib_dir.display()))?;
+
+        let ext = src
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("png")
+            .to_lowercase();
+        let dest = lib_dir.join(format!("{image_id}.{ext}"));
+
+        copy_atomic(src, &dest)?;
+        Ok(dest.to_string_lossy().into_owned())
+    })
+    .await
+}
+
+/// Delete a project's entire managed library folder. Called after the
+/// project's DB rows are cascade-deleted. A missing folder is not an error
+/// (nothing was ever imported / already cleaned).
+#[tauri::command]
+pub async fn remove_library_project(
+    app: tauri::AppHandle,
+    project_id: String,
+) -> Result<(), String> {
+    blocking(move || {
+        let lib_dir = app
+            .path()
+            .app_data_dir()
+            .map_err(|e| format!("app_data_dir: {e}"))?
+            .join("library")
+            .join(&project_id);
+        match std::fs::remove_dir_all(&lib_dir) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("remove {}: {e}", lib_dir.display())),
+        }
     })
     .await
 }

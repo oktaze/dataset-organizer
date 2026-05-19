@@ -16,6 +16,7 @@ import { useAppUpdater } from "@/hooks/use-app-updater";
 import { ModelDownloadPrompt } from "@/components/model/model-download-prompt";
 import { ShortcutsDialog } from "@/components/help/shortcuts-dialog";
 import { UpdateBanner } from "@/components/updates/update-banner";
+import { LibraryMigrationBanner } from "@/components/updates/library-migration-banner";
 import { useProjectStore } from "@/stores/use-project-store";
 import { useUiStore, type CenterView } from "@/stores/use-ui-store";
 import { useSidecarStore } from "@/stores/use-sidecar-store";
@@ -216,6 +217,7 @@ export function AppShell() {
       <ModelDownloadPrompt />
       <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
       <UpdateBanner />
+      <LibraryMigrationBanner />
     </div>
   );
 }

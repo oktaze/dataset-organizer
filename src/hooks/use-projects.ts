@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { projectsDb, type NewProject } from "@/lib/db";
+import { tauri } from "@/lib/tauri";
 import type { Project } from "@/lib/types";
 
 const KEY = ["projects"];
@@ -34,7 +35,16 @@ export function useUpdateProject() {
 export function useDeleteProject() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => projectsDb.remove(id),
+    mutationFn: async (id: string) => {
+      // DB rows cascade-delete; then purge the project's managed image
+      // library. Best-effort: a file error must not fail the deletion.
+      await projectsDb.remove(id);
+      try {
+        await tauri.removeLibraryProject(id);
+      } catch {
+        /* leave orphaned files rather than block project deletion */
+      }
+    },
     onSuccess: () => qc.invalidateQueries(),
   });
 }

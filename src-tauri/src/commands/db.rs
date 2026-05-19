@@ -75,6 +75,10 @@ CREATE TABLE IF NOT EXISTS project_tags (
 const MIGRATIONS: &[&str] = &[
     // v1 — baseline schema.
     SCHEMA,
+    // v2 — managed image library: `filepath` now points at the app-owned
+    // copy; `source_path` retains the original external path for de-dup and
+    // provenance. Legacy rows get NULL → the launch migration backfill marker.
+    "ALTER TABLE images ADD COLUMN source_path TEXT;",
 ];
 
 /// Open the DB in the app data dir and run pending versioned migrations.

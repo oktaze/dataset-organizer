@@ -14,6 +14,7 @@ function img(over: Partial<ImageItem>): ImageItem {
     costumeId: null,
     filename: "f.png",
     filepath: "/f.png",
+    sourcePath: null,
     width: 1,
     height: 1,
     tagsAuto: [],

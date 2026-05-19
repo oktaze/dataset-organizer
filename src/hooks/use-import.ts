@@ -47,17 +47,35 @@ export function useImport() {
       return;
     }
 
-    setProgress({ phase: "Adding images", done: 0, total: fresh.length });
+    setProgress({ phase: "Copying images", done: 0, total: fresh.length });
+    const failed: string[] = [];
     for (const m of fresh) {
-      await imagesDb.insert({
-        projectId: project.id,
-        filename: m.filename,
-        filepath: m.filepath,
-        width: m.width,
-        height: m.height,
-      });
+      try {
+        // Generate the id first so the managed library file is named after
+        // the image row; copy the file in, then store the managed path.
+        const id = crypto.randomUUID();
+        const managed = await tauri.importIntoLibrary(
+          project.id,
+          id,
+          m.filepath,
+        );
+        await imagesDb.insert({
+          id,
+          projectId: project.id,
+          filename: m.filename,
+          filepath: managed,
+          sourcePath: m.filepath,
+          width: m.width,
+          height: m.height,
+        });
+      } catch {
+        // Source vanished / unreadable between scan and copy — skip this
+        // one, keep importing the rest.
+        failed.push(m.filepath);
+      }
       setProgress((p) => p && { ...p, done: p.done + 1 });
     }
+    if (failed.length > 0) setSkipped((s) => [...s, ...failed]);
     qc.invalidateQueries({ queryKey: ["images", project.id] });
   }
 

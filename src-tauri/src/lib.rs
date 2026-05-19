@@ -48,6 +48,8 @@ pub fn run() {
             commands::filesystem::read_images_from_dir,
             commands::filesystem::read_images_meta,
             commands::filesystem::write_caption_file,
+            commands::filesystem::import_into_library,
+            commands::filesystem::remove_library_project,
             commands::filesystem::get_image_thumbnail,
             commands::filesystem::export_dataset,
             commands::filesystem::export_dataset_zip,

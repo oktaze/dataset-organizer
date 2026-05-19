@@ -35,7 +35,11 @@ export interface ImageItem {
   projectId: string;
   costumeId: string | null;
   filename: string;
+  /** App-managed copy (under <app_data>/library/...). */
   filepath: string;
+  /** Original external path the image was imported from (de-dup/provenance);
+   *  null only for legacy rows not yet migrated into the library. */
+  sourcePath: string | null;
   width: number | null;
   height: number | null;
   tagsAuto: TagScore[];

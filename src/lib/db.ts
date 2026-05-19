@@ -202,6 +202,7 @@ function toImage(r: Row): ImageItem {
     costumeId: strOrNull(r.costume_id),
     filename: str(r.filename),
     filepath: str(r.filepath),
+    sourcePath: strOrNull(r.source_path),
     width: numOrNull(r.width),
     height: numOrNull(r.height),
     tagsAuto: parseJson<TagScore[]>(r.tags_auto, []),
@@ -214,9 +215,14 @@ function toImage(r: Row): ImageItem {
 }
 
 export interface NewImage {
+  /** Pre-generated so the caller can name the managed library file after it. */
+  id: string;
   projectId: string;
   filename: string;
+  /** App-managed copy path (already inside the library). */
   filepath: string;
+  /** Original external path it was imported from. */
+  sourcePath: string;
   width: number | null;
   height: number | null;
 }
@@ -241,11 +247,12 @@ export const imagesDb = {
 
   async insert(input: NewImage): Promise<ImageItem> {
     const img: ImageItem = {
-      id: uuid(),
+      id: input.id,
       projectId: input.projectId,
       costumeId: null,
       filename: input.filename,
       filepath: input.filepath,
+      sourcePath: input.sourcePath,
       width: input.width,
       height: input.height,
       tagsAuto: [],
@@ -257,15 +264,17 @@ export const imagesDb = {
     };
     await tauri.dbExecute(
       `INSERT INTO images
-         (id, project_id, costume_id, filename, filepath, width, height,
-          tags_auto, tags_final, caption, costume_score, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, project_id, costume_id, filename, filepath, source_path,
+          width, height, tags_auto, tags_final, caption, costume_score,
+          status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         img.id,
         img.projectId,
         null,
         img.filename,
         img.filepath,
+        img.sourcePath,
         img.width,
         img.height,
         "[]",
@@ -373,15 +382,17 @@ export const imagesDb = {
     for (const img of rows) {
       await tauri.dbExecute(
         `INSERT OR REPLACE INTO images
-           (id, project_id, costume_id, filename, filepath, width, height,
-            tags_auto, tags_final, caption, costume_score, status, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, project_id, costume_id, filename, filepath, source_path,
+            width, height, tags_auto, tags_final, caption, costume_score,
+            status, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           img.id,
           img.projectId,
           img.costumeId,
           img.filename,
           img.filepath,
+          img.sourcePath,
           img.width,
           img.height,
           JSON.stringify(img.tagsAuto),
@@ -425,12 +436,14 @@ export const imagesDb = {
     );
   },
 
+  /** De-dup keys on the **original** import path (managed `filepath`s are
+   *  unique per import). `COALESCE` keeps pre-migration legacy rows working. */
   async existingPaths(projectId: string): Promise<Set<string>> {
     const rows = await tauri.dbQuery<Row>(
-      "SELECT filepath FROM images WHERE project_id = ?",
+      "SELECT COALESCE(source_path, filepath) AS p FROM images WHERE project_id = ?",
       [projectId],
     );
-    return new Set(rows.map((r) => str(r.filepath)));
+    return new Set(rows.map((r) => str(r.p)));
   },
 
   async remove(id: string): Promise<void> {
