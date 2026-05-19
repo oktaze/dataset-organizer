@@ -46,7 +46,8 @@ export function Gallery({ project }: GalleryProps) {
   const [statusFilter, setStatusFilter] = useState<"all" | ImageStatus>(
     "all",
   );
-  const [costumeFilter, setCostumeFilter] = useState<string>("all");
+  const costumeFilter = useUiStore((s) => s.costumeFilter);
+  const setCostumeFilter = useUiStore((s) => s.setCostumeFilter);
 
   const selectedImageId = useUiStore((s) => s.selectedImageId);
   const setSelectedImage = useUiStore((s) => s.setSelectedImage);
@@ -78,11 +79,12 @@ export function Gallery({ project }: GalleryProps) {
 
   const bulkSet = useMemo(() => new Set(bulkIds), [bulkIds]);
 
-  // Reset selection/filters when the project changes.
+  // Reset selection/status when the project changes. The costume filter is
+  // reset at the AppShell level (it lives in the store so the by-costume
+  // overview can drill in pre-filtered without a remount wiping it).
   useEffect(() => {
     clearBulk();
     setStatusFilter("all");
-    setCostumeFilter("all");
   }, [project.id, clearBulk]);
 
   const anchor = useRef<number | null>(null);

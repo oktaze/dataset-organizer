@@ -1,7 +1,8 @@
+import { useEffect } from "react";
 import { ProjectSidebar } from "@/components/projects/project-sidebar";
 import { Gallery } from "@/components/gallery/gallery";
 import { TagEditor } from "@/components/gallery/tag-editor";
-import { CostumeBuilder } from "@/components/costumes/costume-builder";
+import { CostumesPanel } from "@/components/costumes/costumes-panel";
 import { StyleConceptBuilder } from "@/components/style/style-concept-builder";
 import { useSidecar, type SidecarStatus } from "@/hooks/use-sidecar";
 import { useProjects } from "@/hooks/use-projects";
@@ -13,7 +14,7 @@ import { useAppUpdater } from "@/hooks/use-app-updater";
 import { ModelDownloadPrompt } from "@/components/model/model-download-prompt";
 import { UpdateBanner } from "@/components/updates/update-banner";
 import { useProjectStore } from "@/stores/use-project-store";
-import { useUiStore } from "@/stores/use-ui-store";
+import { useUiStore, type CenterView } from "@/stores/use-ui-store";
 import { formatBytes, formatDuration } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +37,7 @@ export function AppShell() {
 
   const view = useUiStore((s) => s.view);
   const setView = useUiStore((s) => s.setView);
+  const setCostumeFilter = useUiStore((s) => s.setCostumeFilter);
   const selectedImageId = useUiStore((s) => s.selectedImageId);
   const setSelectedImage = useUiStore((s) => s.setSelectedImage);
   const lightboxOpen = useUiStore((s) => s.lightboxOpen);
@@ -44,8 +46,26 @@ export function AppShell() {
   const { data: costumes = [] } = useCostumes(activeProjectId);
   const updateImage = useUpdateImage(activeProjectId ?? "");
 
+  // Reset the (store-level) costume filter when switching projects so a
+  // costume picked via the by-costume overview doesn't leak across projects.
+  useEffect(() => {
+    setCostumeFilter("all");
+  }, [activeProjectId, setCostumeFilter]);
+
+  // Character: a single "costumes" tab hosts both the overview and the editor
+  // (CostumesPanel). "setup" is mapped here defensively (no setup tab anymore
+  // for character). Non-character keeps its "setup" → StyleConceptBuilder.
+  const costumesPanelView =
+    project != null &&
+    !!isCharacter &&
+    (view === "costumes" || view === "setup");
+  const styleSetupView =
+    project != null && !isCharacter && view === "setup";
+  const galleryView =
+    project != null && !costumesPanelView && !styleSetupView;
+
   useKeyboardShortcuts({
-    enabled: project != null && view === "gallery" && !lightboxOpen,
+    enabled: galleryView && !lightboxOpen,
     isCharacter: !!isCharacter,
     images,
     costumes,
@@ -54,8 +74,15 @@ export function AppShell() {
     patchImage: (id, patch) => updateImage.mutate({ id, patch }),
   });
 
-  const setupView = project != null && view === "setup";
-  const setupLabel = isCharacter ? "costumes" : "setup";
+  const tabs: [CenterView, string][] = isCharacter
+    ? [
+        ["gallery", "gallery"],
+        ["costumes", "costumes"],
+      ]
+    : [
+        ["gallery", "gallery"],
+        ["setup", "setup"],
+      ];
 
   return (
     <div className="grid h-screen w-screen grid-rows-[1fr_auto] overflow-hidden bg-background text-foreground">
@@ -73,12 +100,7 @@ export function AppShell() {
           ) : (
             <>
               <div className="flex gap-1 border-b border-border bg-sidebar px-3 py-1.5">
-                {(
-                  [
-                    ["gallery", "gallery"],
-                    ["setup", setupLabel],
-                  ] as const
-                ).map(([v, label]) => (
+                {tabs.map(([v, label]) => (
                   <button
                     key={v}
                     type="button"
@@ -94,12 +116,10 @@ export function AppShell() {
                   </button>
                 ))}
               </div>
-              {setupView ? (
-                isCharacter ? (
-                  <CostumeBuilder projectId={project.id} />
-                ) : (
-                  <StyleConceptBuilder project={project} />
-                )
+              {styleSetupView ? (
+                <StyleConceptBuilder project={project} />
+              ) : costumesPanelView ? (
+                <CostumesPanel project={project} />
               ) : (
                 <Gallery project={project} />
               )}
@@ -107,7 +127,7 @@ export function AppShell() {
           )}
         </main>
 
-        {project != null && !setupView ? (
+        {project != null && galleryView ? (
           <TagEditor project={project} />
         ) : (
           <aside className="flex h-full items-center justify-center border-l border-border bg-card p-6">

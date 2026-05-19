@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type CenterView = "gallery" | "setup";
+export type CenterView = "gallery" | "costumes" | "setup";
 
 interface UiState {
   view: CenterView;
@@ -10,7 +10,11 @@ interface UiState {
   lightboxOpen: boolean;
   /** Bulk-review multi-selection. */
   bulkIds: string[];
+  /** Gallery costume filter: "all" | "none" | costumeId. Lifted here so the
+   *  by-costume overview can drill into the gallery pre-filtered. */
+  costumeFilter: string;
   setView: (view: CenterView) => void;
+  setCostumeFilter: (id: string) => void;
   setSelectedImage: (id: string | null) => void;
   openLightbox: (id: string) => void;
   closeLightbox: () => void;
@@ -24,7 +28,9 @@ export const useUiStore = create<UiState>((set) => ({
   selectedImageId: null,
   lightboxOpen: false,
   bulkIds: [],
+  costumeFilter: "all",
   setView: (view) => set({ view }),
+  setCostumeFilter: (costumeFilter) => set({ costumeFilter }),
   setSelectedImage: (selectedImageId) => set({ selectedImageId }),
   openLightbox: (id) => set({ selectedImageId: id, lightboxOpen: true }),
   closeLightbox: () => set({ lightboxOpen: false }),
