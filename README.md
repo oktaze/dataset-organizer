@@ -127,7 +127,7 @@ auto-update then works for every release after it.
    git tag vX.Y.Z
    git push && git push --tags
    ```
-3. CI builds Linux / Windows / macOS (Apple Silicon + Intel), signs the
+3. CI builds Linux / Windows / macOS (Apple Silicon), signs the
    updater artifacts (`TAURI_SIGNING_PRIVATE_KEY` repo secret), and
    publishes a GitHub Release with `latest.json`. Installed apps pick up
    the update on next launch.

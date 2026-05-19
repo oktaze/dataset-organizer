@@ -19,7 +19,6 @@ jobs:
         include:
           - platform: ubuntu-22.04 # Linux AppImage (older glibc = wider compat)
           - platform: macos-14 # Apple Silicon (arm64)
-          - platform: macos-13 # Intel (x86_64)
           - platform: windows-latest # Windows NSIS
     runs-on: ${{ matrix.platform }}
     steps:

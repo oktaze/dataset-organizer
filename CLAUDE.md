@@ -278,7 +278,7 @@ WD_THRESHOLD=0.35               # seuil de confiance minimum
 - Endpoint : `plugins.updater.endpoints` → `https://github.com/oktaze/lora-organizer/releases/latest/download/latest.json`. `bundle.createUpdaterArtifacts: true` ⇒ **chaque `pnpm tauri build` doit être signé**.
 - Clé minisign **hors repo** : `~/.tauri/lora-organizer-updater.key` (sans mot de passe). Pubkey committée dans `tauri.conf.json`. Secret CI : `TAURI_SIGNING_PRIVATE_KEY`. **Perte de la clé = plus aucun client ne peut s'updater.**
 - `scripts/tauri.mjs` auto-charge cette clé si `TAURI_SIGNING_PRIVATE_KEY` n'est pas déjà posée ⇒ `pnpm tauri build` signe sans manip.
-- CI : `.github/workflows/release.yml`, déclenchée sur tag `v*`. Matrice Linux / Windows / macOS arm64 / macOS Intel. `tauri-action` build, signe, publie la Release + `latest.json`.
+- CI : `.github/workflows/release.yml`, déclenchée sur tag `v*`. Matrice Linux / Windows / macOS arm64. `tauri-action` build, signe, publie la Release + `latest.json`.
 - Flux release : bump `version` dans `src-tauri/tauri.conf.json` **+** `package.json` **+** `src-tauri/Cargo.toml` → `git tag vX.Y.Z` → push tags. L'updater compare à `latest.json` ⇒ **toujours bumper**.
 - Première release = install **manuelle** (l'updater n'agit que depuis une version qui l'embarque déjà). Linux : seul l'**AppImage** s'auto-update. macOS non signé : 1re install clic-droit → Ouvrir.
 
@@ -286,7 +286,7 @@ WD_THRESHOLD=0.35               # seuil de confiance minimum
 
 ## Build & CI — pièges connus
 
-- **PyInstaller ne cross-compile pas** : build sur chaque OS. macOS Intel exige un vrai runner `macos-13` (runners Intel GitHub rares/lents).
+- **PyInstaller ne cross-compile pas** : build sur chaque OS. **macOS Intel non buildé** : le runner `macos-13` ne démarre jamais sur GitHub (file d'attente Intel) ⇒ retiré de la matrice. Apple Silicon (`macos-14`) uniquement.
 - `scripts/build-sidecar.mjs` choisit le python du venv selon l'OS (`bin/` vs `Scripts/`) ; `package.json` → `build:sidecar` pointe dessus.
 - `bundle.resources` = `"sidecar-bin/*"` (glob) pour embarquer `lora-sidecar` **ou** `lora-sidecar.exe`.
 - CI : **Node 22** requis (pnpm 11 utilise `node:sqlite`, absent < Node 22) ; **Python 3.12** (wheels cp312 onnxruntime/numpy/pillow).
