@@ -5,12 +5,12 @@ import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { ReprocessDialog } from "@/components/reprocess/reprocess-dialog";
 import { useImages, useUpdateImage } from "@/hooks/use-images";
 import { useCostumes } from "@/hooks/use-costumes";
 import { useConstantTags } from "@/hooks/use-constant-tags";
 import { useUiStore } from "@/stores/use-ui-store";
 import { sidecar } from "@/lib/sidecar";
-import { makePipelineCtx, processImage } from "@/lib/pipeline";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/types";
 
@@ -36,10 +36,12 @@ export function TagEditor({ project }: TagEditorProps) {
 
   const [caption, setCaption] = useState("");
   const [draftTag, setDraftTag] = useState("");
-  const [retagging, setRetagging] = useState(false);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [reprocessOpen, setReprocessOpen] = useState(false);
   useEffect(() => {
     setCaption(image?.caption ?? "");
     setDraftTag("");
+    setSel(new Set());
   }, [image?.id, image?.caption]);
 
   const scoreOf = useMemo(() => {
@@ -74,6 +76,35 @@ export function TagEditor({ project }: TagEditorProps) {
     setTags([...tags, t]);
   }
 
+  function removeOne(t: string) {
+    setTags(tags.filter((x) => x !== t));
+    if (sel.has(t)) {
+      const n = new Set(sel);
+      n.delete(t);
+      setSel(n);
+    }
+  }
+
+  function toggleSel(t: string) {
+    const n = new Set(sel);
+    if (n.has(t)) n.delete(t);
+    else n.add(t);
+    setSel(n);
+  }
+
+  function removeSelected() {
+    if (sel.size === 0) return;
+    setTags(tags.filter((x) => !sel.has(x)));
+    setSel(new Set());
+  }
+
+  function clearAllTags() {
+    if (tags.length === 0) return;
+    if (!confirm(`Remove all ${tags.length} tags from this image?`)) return;
+    setTags([]);
+    setSel(new Set());
+  }
+
   function onTagKey(e: KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
@@ -98,21 +129,6 @@ export function TagEditor({ project }: TagEditorProps) {
     patch({ caption: next });
   }
 
-  async function retagImage() {
-    if (!image || retagging) return;
-    setRetagging(true);
-    try {
-      const ctx = await makePipelineCtx(project);
-      const next = await processImage(image, ctx);
-      await update.mutateAsync({ id: image.id, patch: next });
-      setCaption(next.caption ?? "");
-    } catch (e) {
-      console.error("re-tag failed:", e);
-    } finally {
-      setRetagging(false);
-    }
-  }
-
   return (
     <aside className="flex h-full flex-col overflow-hidden border-l border-border bg-card">
       <div className="flex items-start gap-2 border-b border-border px-4 py-3">
@@ -127,16 +143,20 @@ export function TagEditor({ project }: TagEditorProps) {
         <Button
           size="xs"
           variant="outline"
-          onClick={() => void retagImage()}
-          disabled={retagging}
-          title="Re-run WD Tagger, costume match & caption for this image"
+          onClick={() => setReprocessOpen(true)}
+          title="Re-run WD Tagger, costume match & caption — with options"
         >
-          <Wand2
-            className={cn("size-3", retagging && "animate-spin")}
-          />
-          Re-tag
+          <Wand2 className="size-3" />
+          Re-tag…
         </Button>
       </div>
+
+      <ReprocessDialog
+        project={project}
+        open={reprocessOpen}
+        onOpenChange={setReprocessOpen}
+        scopeIds={[image.id]}
+      />
 
       <div className="flex-1 space-y-4 overflow-y-auto p-4">
         {project.type === "character" && (
@@ -159,20 +179,59 @@ export function TagEditor({ project }: TagEditorProps) {
         )}
 
         <div className="flex flex-col gap-1.5">
-          <Label>Tags · confidence colored</Label>
+          <div className="flex items-center justify-between gap-2">
+            <Label>Tags · click to select, ✕ to remove</Label>
+            <div className="flex items-center gap-2 text-[11px]">
+              {sel.size > 0 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={removeSelected}
+                    className="font-medium text-destructive hover:underline"
+                  >
+                    Remove {sel.size} selected
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSel(new Set())}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                tags.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={clearAllTags}
+                    className="text-muted-foreground hover:text-destructive hover:underline"
+                  >
+                    Clear all
+                  </button>
+                )
+              )}
+            </div>
+          </div>
           <div className="flex flex-wrap gap-1 rounded-lg border border-input bg-input/30 p-1.5">
             {tags.map((t) => (
               <span
                 key={t}
+                onClick={() => toggleSel(t)}
+                title="Click to select for group removal"
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium",
-                  scoreClass(scoreOf(t)),
+                  "inline-flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium select-none",
+                  sel.has(t)
+                    ? "bg-destructive/25 text-destructive ring-1 ring-destructive"
+                    : scoreClass(scoreOf(t)),
                 )}
               >
                 {t}
                 <button
                   type="button"
-                  onClick={() => setTags(tags.filter((x) => x !== t))}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeOne(t);
+                  }}
                   aria-label={`Remove ${t}`}
                 >
                   <X className="size-3" />

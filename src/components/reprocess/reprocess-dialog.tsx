@@ -26,15 +26,27 @@ interface ReprocessDialogProps {
   project: Project;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * When set, only these image ids are processed (selection-scoped run).
+   * Undefined = the whole project.
+   */
+  scopeIds?: string[];
 }
 
 export function ReprocessDialog({
   project,
   open,
   onOpenChange,
+  scopeIds,
 }: ReprocessDialogProps) {
   const { data: images = [] } = useImages(project.id);
   const { run, running, progress, error, result } = useReprocess();
+
+  const scoped = scopeIds != null;
+  const targetImages = scoped
+    ? images.filter((img) => scopeIds.includes(img.id))
+    : images;
+  const targetCount = targetImages.length;
 
   const threshold = useSettingsStore(
     (s) => s.thresholds[project.id] ?? DEFAULT_THRESHOLD,
@@ -59,11 +71,22 @@ export function ReprocessDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Tag images</DialogTitle>
+          <DialogTitle>
+            {scoped ? "Tag selected images" : "Tag images"}
+          </DialogTitle>
           <DialogDescription>
-            Runs WD Tagger, costume matching and caption building on the
-            images in <strong>{project.name}</strong>. Images that already
-            have tags are handled per the policy below.
+            Runs WD Tagger, costume matching and caption building on{" "}
+            {scoped ? (
+              <strong>
+                {targetCount} selected image{targetCount === 1 ? "" : "s"}
+              </strong>
+            ) : (
+              <>
+                the images in <strong>{project.name}</strong>
+              </>
+            )}
+            . Images that already have tags are handled per the policy
+            below.
           </DialogDescription>
         </DialogHeader>
 
@@ -180,8 +203,8 @@ export function ReprocessDialog({
           {existingPolicy === "overwrite" ? (
             <p className="rounded-md bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-400">
               Overwrites auto tags & captions for every already-tagged image
-              of the {images.length} in this project — manual tag/caption
-              edits and validation status are reset.
+              among the {targetCount} targeted — manual tag/caption edits
+              and validation status are reset.
             </p>
           ) : existingPolicy === "append" ? (
             <p className="rounded-md bg-muted px-2 py-1.5 text-[11px] text-muted-foreground">
@@ -233,15 +256,15 @@ export function ReprocessDialog({
             Close
           </Button>
           <Button
-            onClick={() => void run(project, images)}
-            disabled={running || images.length === 0}
+            onClick={() => void run(project, targetImages)}
+            disabled={running || targetCount === 0}
           >
             {running ? (
               <Loader2 className="size-3.5 animate-spin" />
             ) : (
               <Tags className="size-3.5" />
             )}
-            Tag images
+            {scoped ? `Tag ${targetCount} selected` : "Tag images"}
           </Button>
         </DialogFooter>
       </DialogContent>

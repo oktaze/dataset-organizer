@@ -24,7 +24,7 @@ import caption
 import costume_matcher
 import tagger
 
-app = FastAPI(title="Dataset Organizer Sidecar", version="0.4.0")
+app = FastAPI(title="Dataset Organizer Sidecar", version="0.4.1")
 
 # The Tauri webview (http://localhost:1420 in dev, tauri://localhost in prod)
 # is a different origin than this 127.0.0.1 sidecar. Allow all origins —

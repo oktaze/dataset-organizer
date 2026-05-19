@@ -58,6 +58,10 @@ export function Gallery({ project }: GalleryProps) {
   const undo = useUndo(project);
   const [exportOpen, setExportOpen] = useState(false);
   const [reprocessOpen, setReprocessOpen] = useState(false);
+  // Snapshot of ids to tag; null = whole project (header button).
+  const [reprocessScope, setReprocessScope] = useState<string[] | null>(
+    null,
+  );
   const [bulkTag, setBulkTag] = useState("");
 
   const [statusFilter, setStatusFilter] = useState<"all" | ImageStatus>(
@@ -169,6 +173,8 @@ export function Gallery({ project }: GalleryProps) {
   });
 
   const selCount = bulkIds.length;
+  const allVisibleSelected =
+    visible.length > 0 && visible.every((i) => bulkSet.has(i.id));
   async function bulkDelete() {
     if (!confirm(`Delete ${selCount} selected image(s)?`)) return;
     await bulk.remove.mutateAsync(bulkIds);
@@ -197,7 +203,10 @@ export function Gallery({ project }: GalleryProps) {
         </div>
         <Button
           variant="outline"
-          onClick={() => setReprocessOpen(true)}
+          onClick={() => {
+            setReprocessScope(null);
+            setReprocessOpen(true);
+          }}
           disabled={images.length === 0 || running}
         >
           <Tags className="size-3.5" />
@@ -288,10 +297,16 @@ export function Gallery({ project }: GalleryProps) {
           <Button
             size="xs"
             variant="ghost"
-            onClick={() => setBulk(visible.map((i) => i.id))}
+            onClick={() =>
+              allVisibleSelected
+                ? clearBulk()
+                : setBulk(visible.map((i) => i.id))
+            }
             disabled={visible.length === 0}
           >
-            Select all ({visible.length})
+            {allVisibleSelected
+              ? "Deselect all"
+              : `Select all (${visible.length})`}
           </Button>
 
           {selCount > 0 && (
@@ -310,6 +325,18 @@ export function Gallery({ project }: GalleryProps) {
               >
                 <Check className="size-3" />
                 Validate
+              </Button>
+              <Button
+                size="xs"
+                variant="secondary"
+                onClick={() => {
+                  setReprocessScope(bulkIds);
+                  setReprocessOpen(true);
+                }}
+                title="Run WD Tagger / caption on the selected images only"
+              >
+                <Tags className="size-3" />
+                Tag
               </Button>
               <Button
                 size="xs"
@@ -405,6 +432,7 @@ export function Gallery({ project }: GalleryProps) {
         project={project}
         open={reprocessOpen}
         onOpenChange={setReprocessOpen}
+        scopeIds={reprocessScope ?? undefined}
       />
       <ImageLightbox images={visible} costumeName={costumeName} />
 
