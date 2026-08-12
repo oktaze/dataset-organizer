@@ -116,25 +116,34 @@ cross-compile — build on each target OS.
 
 ## Releasing & auto-update
 
-Releases are produced by `.github/workflows/release.yml` on a version tag.
-The first updater-enabled release must be **installed manually**;
-auto-update then works for every release after it.
+Releases are automated by `.github/workflows/release.yml` via
+[release-please](https://github.com/googleapis/release-please). You never
+bump versions or create tags by hand. The first updater-enabled release
+must be **installed manually**; auto-update then works for every release
+after it.
 
-1. Bump `version` in `src-tauri/tauri.conf.json`, `package.json`, and
-   `src-tauri/Cargo.toml` (keep them in sync).
-2. Commit, then:
-   ```bash
-   git tag vX.Y.Z
-   git push && git push --tags
-   ```
-3. CI builds Linux / Windows / macOS (Apple Silicon), signs the
-   updater artifacts (`TAURI_SIGNING_PRIVATE_KEY` repo secret), and
-   publishes a GitHub Release with `latest.json`. Installed apps pick up
-   the update on next launch.
+1. Write [Conventional Commits](https://www.conventionalcommits.org/) on
+   `main` — `fix:` → patch, `feat:` → minor, `feat!:` /
+   `BREAKING CHANGE:` → major.
+2. release-please keeps an open **release PR** (“chore(main): release
+   X.Y.Z”) that fills `CHANGELOG.md` and bumps the version in
+   `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`
+   together. Review it as changes land.
+3. **Merge the release PR.** That creates the `vX.Y.Z` tag + GitHub
+   Release (body = changelog), which triggers the build matrix (Linux /
+   Windows / macOS Apple Silicon). CI signs the updater artifacts
+   (`TAURI_SIGNING_PRIVATE_KEY` repo secret) and uploads the installers +
+   `latest.json` onto that Release. Installed apps pick up the update on
+   next launch.
 
 Notes:
-- The updater compares the running version to `latest.json`; **always
-  bump `version`** for a new release.
+- Version sync is driven by `release-please-config.json` +
+  `.release-please-manifest.json`. The `# x-release-please-version`
+  comment on the `version` line in `Cargo.toml` is required — don't
+  remove it.
+- Requires **Settings → Actions → General → Allow GitHub Actions to
+  create and approve pull requests** to be enabled (so the release PR can
+  open).
 - On Linux, only the **AppImage** auto-updates (the `.deb` is for manual
   install).
 - macOS builds are unsigned: on first manual install, right-click → Open.

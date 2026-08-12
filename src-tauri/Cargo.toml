@@ -1,6 +1,6 @@
 [package]
 name = "dataset-organizer"
-version = "0.5.0"
+version = "0.6.0"
 description = "Organize image datasets for training Stable Diffusion / Illustrious XL LoRAs — local auto-tagging, character costume system, dataset export."
 authors = ["you"]
 edition = "2021"
