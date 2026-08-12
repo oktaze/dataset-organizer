@@ -1,18 +1,24 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
-import { Check, RefreshCw, X, Wand2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, Plus, RefreshCw, X, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { TagComboboxInput } from "@/components/ui/tag-combobox";
 import { ReprocessDialog } from "@/components/reprocess/reprocess-dialog";
 import { useImages, useUpdateImage } from "@/hooks/use-images";
 import { useCostumes } from "@/hooks/use-costumes";
 import { useConstantTags } from "@/hooks/use-constant-tags";
+import { useProjectVocabulary } from "@/hooks/use-project-vocabulary";
 import { useUiStore } from "@/stores/use-ui-store";
 import { sidecar } from "@/lib/sidecar";
+import { ciKey } from "@/lib/tag-key";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/types";
+
+/** WD-tagger confidence floor for the "detected but unused" suggestions. */
+const SUGGEST_THRESHOLD = 0.35;
 
 function scoreClass(score: number | undefined): string {
   if (score === undefined) return "bg-secondary text-secondary-foreground";
@@ -29,18 +35,17 @@ export function TagEditor({ project }: TagEditorProps) {
   const { data: images = [] } = useImages(project.id);
   const { data: costumes = [] } = useCostumes(project.id);
   const { data: constants = [] } = useConstantTags(project.id);
+  const vocabulary = useProjectVocabulary(project.id);
   const update = useUpdateImage(project.id);
 
   const selectedImageId = useUiStore((s) => s.selectedImageId);
   const image = images.find((i) => i.id === selectedImageId) ?? null;
 
   const [caption, setCaption] = useState("");
-  const [draftTag, setDraftTag] = useState("");
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [reprocessOpen, setReprocessOpen] = useState(false);
   useEffect(() => {
     setCaption(image?.caption ?? "");
-    setDraftTag("");
     setSel(new Set());
   }, [image?.id, image?.caption]);
 
@@ -48,6 +53,15 @@ export function TagEditor({ project }: TagEditorProps) {
     const m = new Map(image?.tagsAuto.map((t) => [t.tag, t.score]) ?? []);
     return (tag: string) => m.get(tag);
   }, [image?.tagsAuto]);
+
+  // WD-detected tags not (yet) in the final set — offered as one-click chips.
+  const suggested = useMemo(() => {
+    if (!image) return [];
+    const kept = new Set(image.tagsFinal.map(ciKey));
+    return image.tagsAuto
+      .filter((t) => t.score >= SUGGEST_THRESHOLD && !kept.has(ciKey(t.tag)))
+      .sort((a, b) => b.score - a.score);
+  }, [image]);
 
   if (!image) {
     return (
@@ -69,10 +83,9 @@ export function TagEditor({ project }: TagEditorProps) {
     patch({ tagsFinal: next });
   }
 
-  function addTag() {
-    const t = draftTag.trim().replace(/,$/, "").trim();
-    setDraftTag("");
-    if (t === "" || tags.includes(t)) return;
+  function addTag(raw: string) {
+    const t = raw.trim().replace(/,$/, "").trim();
+    if (t === "" || tags.some((x) => ciKey(x) === ciKey(t))) return;
     setTags([...tags, t]);
   }
 
@@ -103,13 +116,6 @@ export function TagEditor({ project }: TagEditorProps) {
     if (!confirm(`Remove all ${tags.length} tags from this image?`)) return;
     setTags([]);
     setSel(new Set());
-  }
-
-  function onTagKey(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      addTag();
-    }
   }
 
   async function rebuildCaption() {
@@ -238,15 +244,35 @@ export function TagEditor({ project }: TagEditorProps) {
                 </button>
               </span>
             ))}
-            <input
-              value={draftTag}
-              onChange={(e) => setDraftTag(e.target.value)}
-              onKeyDown={onTagKey}
-              onBlur={addTag}
+            <TagComboboxInput
+              suggestions={vocabulary}
+              onCommit={addTag}
+              exclude={tags}
               placeholder={tags.length === 0 ? "Add tag…" : ""}
-              className="h-6 min-w-24 flex-1 bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
           </div>
+
+          {suggested.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-muted-foreground">
+                Suggested · detected by WD Tagger, click to add
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {suggested.map((t) => (
+                  <button
+                    key={t.tag}
+                    type="button"
+                    onClick={() => addTag(t.tag)}
+                    title={`${(t.score * 100).toFixed(0)}% — click to add`}
+                    className="inline-flex items-center gap-1 rounded-md border border-dashed border-border bg-transparent px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+                  >
+                    <Plus className="size-3" />
+                    {t.tag}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">

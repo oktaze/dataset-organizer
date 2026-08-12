@@ -2,7 +2,7 @@
  *  The frontend owns all business logic (per CLAUDE.md). */
 
 import { tauri } from "@/lib/tauri";
-import { ciKey } from "@/lib/tag-key";
+import { ciKey, dedupeNames } from "@/lib/tag-key";
 import type {
   ConstantTag,
   Costume,
@@ -253,6 +253,18 @@ export const imagesDb = {
     return rows.map(toImage);
   },
 
+  /** Fetch the given images straight from the DB (freshest state, bypassing
+   *  any query cache). Order is not guaranteed. */
+  async getMany(ids: string[]): Promise<ImageItem[]> {
+    if (ids.length === 0) return [];
+    const ph = ids.map(() => "?").join(", ");
+    const rows = await tauri.dbQuery<Row>(
+      `SELECT * FROM images WHERE id IN (${ph})`,
+      ids,
+    );
+    return rows.map(toImage);
+  },
+
   async insert(input: NewImage): Promise<ImageItem> {
     const img: ImageItem = {
       id: input.id,
@@ -340,42 +352,70 @@ export const imagesDb = {
     );
   },
 
-  /** Add `tag` to `tags_final` of every listed image (case-insensitive
-   *  de-dup). Read-modify-write per row since `tags_final` is JSON-as-TEXT —
-   *  business logic stays in the frontend (per CLAUDE.md). */
-  async addTagMany(ids: string[], tag: string): Promise<void> {
-    const t = tag.trim();
-    if (ids.length === 0 || t === "") return;
+  /** Add one or more tags to `tags_final` of every listed image
+   *  (case-insensitive de-dup). Read-modify-write per row since `tags_final`
+   *  is JSON-as-TEXT — business logic stays in the frontend (per CLAUDE.md).
+   *
+   *  `position` chooses the 0-based insertion index (from the start) where the
+   *  block of tags is inserted, preserving their given order. Any existing
+   *  occurrence of a listed tag is removed first, so the requested position is
+   *  always honoured even when a tag was already present elsewhere.
+   *  `undefined` (or an index past the end) appends. */
+  async addTagMany(
+    ids: string[],
+    tags: string | string[],
+    position?: number,
+  ): Promise<void> {
+    const list = dedupeNames(
+      (Array.isArray(tags) ? tags : [tags]).map((t) => t.trim()),
+    ).filter((t) => t !== "");
+    if (ids.length === 0 || list.length === 0) return;
     const ph = ids.map(() => "?").join(", ");
     const rows = await tauri.dbQuery<Row>(
       `SELECT id, tags_final FROM images WHERE id IN (${ph})`,
       ids,
     );
-    const k = ciKey(t);
+    const keys = new Set(list.map(ciKey));
     for (const r of rows) {
       const cur = parseJson<string[]>(r.tags_final, []);
-      if (cur.some((x) => ciKey(x) === k)) continue;
+      const next = cur.filter((x) => !keys.has(ciKey(x)));
+      const pos =
+        position == null
+          ? next.length
+          : Math.max(0, Math.min(position, next.length));
+      next.splice(pos, 0, ...list);
+      if (
+        next.length === cur.length &&
+        next.every((x, i) => x === cur[i])
+      ) {
+        continue;
+      }
       await tauri.dbExecute(
         "UPDATE images SET tags_final = ? WHERE id = ?",
-        [JSON.stringify([...cur, t]), str(r.id)],
+        [JSON.stringify(next), str(r.id)],
       );
     }
   },
 
-  /** Remove `tag` (case-insensitive) from `tags_final` of every listed
-   *  image. */
-  async removeTagMany(ids: string[], tag: string): Promise<void> {
-    const t = tag.trim();
-    if (ids.length === 0 || t === "") return;
+  /** Remove one or more tags (case-insensitive) from `tags_final` of every
+   *  listed image. */
+  async removeTagMany(
+    ids: string[],
+    tags: string | string[],
+  ): Promise<void> {
+    const list = (Array.isArray(tags) ? tags : [tags])
+      .map((t) => t.trim())
+      .filter((t) => t !== "");
+    if (ids.length === 0 || list.length === 0) return;
     const ph = ids.map(() => "?").join(", ");
     const rows = await tauri.dbQuery<Row>(
       `SELECT id, tags_final FROM images WHERE id IN (${ph})`,
       ids,
     );
-    const k = ciKey(t);
+    const keys = new Set(list.map(ciKey));
     for (const r of rows) {
       const cur = parseJson<string[]>(r.tags_final, []);
-      const next = cur.filter((x) => ciKey(x) !== k);
+      const next = cur.filter((x) => !keys.has(ciKey(x)));
       if (next.length === cur.length) continue;
       await tauri.dbExecute(
         "UPDATE images SET tags_final = ? WHERE id = ?",
