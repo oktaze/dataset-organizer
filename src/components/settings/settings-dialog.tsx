@@ -11,6 +11,7 @@ import { Download, Loader2, RefreshCw, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TagInput } from "@/components/ui/tag-input";
 import { useModelDownload } from "@/hooks/use-model-download";
 import { useUpdaterStore } from "@/stores/use-updater-store";
 import { useSettingsStore } from "@/stores/use-settings-store";
@@ -37,6 +38,13 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
   const updBusy = updState === "checking" || updState === "downloading";
   const updPercent =
     updTotal > 0 ? Math.min(100, (updDownloaded / updTotal) * 100) : null;
+
+  const globalBlacklist = useSettingsStore((s) => s.globalBlacklist);
+  const setGlobalBlacklist = useSettingsStore((s) => s.setGlobalBlacklist);
+  const blacklistTags = globalBlacklist
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
 
   const hfUsername = useSettingsStore((s) => s.hfUsername);
   const setHfUsername = useSettingsStore((s) => s.setHfUsername);
@@ -71,8 +79,8 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
-            App updates, the local WD Tagger model, and your HuggingFace
-            account.
+            App updates, the local WD Tagger model, the global tag blacklist,
+            and your HuggingFace account.
           </DialogDescription>
         </DialogHeader>
 
@@ -176,6 +184,20 @@ export function SettingsDialog({ open, onOpenChange }: SettingsDialogProps) {
                 Download
               </Button>
             </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label>Global tag blacklist (Curate)</Label>
+            <TagInput
+              value={blacklistTags}
+              onChange={(tags) => setGlobalBlacklist(tags.join(", "))}
+              placeholder="Add a tag to blacklist…"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Shared by every project. Case-insensitive and underscore/space
+              insensitive. The gallery’s Curate button strips these from tags
+              and captions.
+            </p>
           </div>
 
           <div className="flex flex-col gap-1.5">

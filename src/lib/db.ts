@@ -3,6 +3,7 @@
 
 import { tauri } from "@/lib/tauri";
 import { ciKey, dedupeNames } from "@/lib/tag-key";
+import { curateTags } from "@/lib/curate";
 import type {
   ConstantTag,
   Costume,
@@ -422,6 +423,38 @@ export const imagesDb = {
         [JSON.stringify(next), str(r.id)],
       );
     }
+  },
+
+  /** Strip every blacklisted tag from `tags_final` of the listed images
+   *  (case-insensitive, underscore ↔ space insensitive via `curateTags`).
+   *  Rows left unchanged are not written. Returns how many images changed
+   *  and how many tag occurrences were removed, for user feedback. */
+  async curateMany(
+    ids: string[],
+    blacklist: string[],
+  ): Promise<{ imagesChanged: number; tagsRemoved: number }> {
+    let imagesChanged = 0;
+    let tagsRemoved = 0;
+    if (ids.length === 0 || blacklist.length === 0) {
+      return { imagesChanged, tagsRemoved };
+    }
+    const ph = ids.map(() => "?").join(", ");
+    const rows = await tauri.dbQuery<Row>(
+      `SELECT id, tags_final FROM images WHERE id IN (${ph})`,
+      ids,
+    );
+    for (const r of rows) {
+      const cur = parseJson<string[]>(r.tags_final, []);
+      const next = curateTags(cur, blacklist);
+      if (next.length === cur.length) continue;
+      imagesChanged += 1;
+      tagsRemoved += cur.length - next.length;
+      await tauri.dbExecute(
+        "UPDATE images SET tags_final = ? WHERE id = ?",
+        [JSON.stringify(next), str(r.id)],
+      );
+    }
+    return { imagesChanged, tagsRemoved };
   },
 
   /** Re-insert full image rows (preserving id + created_at), overwriting any

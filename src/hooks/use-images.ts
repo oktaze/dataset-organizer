@@ -171,6 +171,20 @@ export function useBulkImageActions(project: Project) {
     onSuccess: invalidate,
   });
 
+  // On-demand "Curate": strip the global blacklist from tags_final, then
+  // rebuild captions in the same mutation (exports prefer the stored caption,
+  // so a stale caption would still leak the blacklisted tags). Mirrors
+  // removeTag; the up-front snapshot makes it a single Undo step.
+  const curate = useMutation({
+    mutationFn: async (args: { ids: string[]; blacklist: string[] }) => {
+      snapshot(args.ids, `Curated ${args.ids.length} image(s)`);
+      const res = await imagesDb.curateMany(args.ids, args.blacklist);
+      await rebuildInto(args.ids);
+      return res;
+    },
+    onSuccess: invalidate,
+  });
+
   return {
     setStatus,
     setCostume,
@@ -178,6 +192,7 @@ export function useBulkImageActions(project: Project) {
     addTag,
     removeTag,
     rebuildCaptions,
+    curate,
   };
 }
 

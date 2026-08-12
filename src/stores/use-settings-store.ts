@@ -22,6 +22,9 @@ interface SettingsState {
   appendTags: Record<string, string>;
   /** What to do when an image already has tags, per project id. */
   existingPolicy: Record<string, ExistingPolicy>;
+  /** Tags stripped from images by the on-demand Curate action, raw
+   *  comma-separated string. Global — shared by every project. */
+  globalBlacklist: string;
   /** First-launch WD model download prompt already shown. */
   modelPromptSeen: boolean;
   /** HuggingFace username of the connected account (token is in
@@ -33,6 +36,7 @@ interface SettingsState {
   setPrependTags: (projectId: string, value: string) => void;
   setAppendTags: (projectId: string, value: string) => void;
   setExistingPolicy: (projectId: string, value: ExistingPolicy) => void;
+  setGlobalBlacklist: (value: string) => void;
   setModelPromptSeen: (seen: boolean) => void;
   setHfUsername: (name: string | null) => void;
 }
@@ -46,6 +50,7 @@ export const useSettingsStore = create<SettingsState>()(
       prependTags: {},
       appendTags: {},
       existingPolicy: {},
+      globalBlacklist: "",
       modelPromptSeen: false,
       hfUsername: null,
       setThreshold: (projectId, value) =>
@@ -72,6 +77,7 @@ export const useSettingsStore = create<SettingsState>()(
         set((s) => ({
           existingPolicy: { ...s.existingPolicy, [projectId]: value },
         })),
+      setGlobalBlacklist: (globalBlacklist) => set({ globalBlacklist }),
       setModelPromptSeen: (modelPromptSeen) => set({ modelPromptSeen }),
       setHfUsername: (hfUsername) => set({ hfUsername }),
     }),
@@ -112,6 +118,10 @@ export function getExistingPolicy(projectId: string): ExistingPolicy {
     useSettingsStore.getState().existingPolicy[projectId] ??
     DEFAULT_EXISTING_POLICY
   );
+}
+
+export function getGlobalBlacklist(): string[] {
+  return parseCsv(useSettingsStore.getState().globalBlacklist);
 }
 
 export function getHfUsername(): string | null {
