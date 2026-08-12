@@ -24,6 +24,7 @@ import { TagComboboxInput } from "@/components/ui/tag-combobox";
 import { ImageCell } from "@/components/gallery/image-cell";
 import { ImageLightbox } from "@/components/gallery/image-lightbox";
 import { BulkActionBar } from "@/components/gallery/bulk-action-bar";
+import { CurateButton } from "@/components/gallery/curate-button";
 import { ExportDialog } from "@/components/export/export-dialog";
 import { ReprocessDialog } from "@/components/reprocess/reprocess-dialog";
 import { useImages, useUndo } from "@/hooks/use-images";
@@ -131,6 +132,7 @@ export function Gallery({ project }: GalleryProps) {
   }, [images, statusFilter, costumeFilter, deferredQuery, tagFilters]);
 
   const bulkSet = useMemo(() => new Set(bulkIds), [bulkIds]);
+  const imageIds = useMemo(() => images.map((i) => i.id), [images]);
 
   // Reset selection/status when the project changes. The costume filter is
   // reset at the AppShell level (it lives in the store so the by-costume
@@ -238,6 +240,7 @@ export function Gallery({ project }: GalleryProps) {
           <Tags className="size-3.5" />
           Tag images
         </Button>
+        <CurateButton project={project} imageIds={imageIds} />
         <Button
           variant="outline"
           onClick={() => setExportOpen(true)}
