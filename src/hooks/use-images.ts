@@ -12,6 +12,20 @@ import type { ImageItem, ImageStatus, Project } from "@/lib/types";
 
 const key = (projectId: string) => ["images", projectId];
 
+/** Human-readable undo label for a bulk tag add/remove batch. */
+function tagBatchLabel(
+  verb: "Added" | "Removed",
+  tags: string[],
+  count: number,
+): string {
+  const what =
+    tags.length === 1
+      ? `“${tags[0]}”`
+      : `${tags.length} tags`;
+  const prep = verb === "Added" ? "to" : "from";
+  return `${verb} ${what} ${prep} ${count} image(s)`;
+}
+
 export function useImages(projectId: string | null) {
   return useQuery<ImageItem[]>({
     queryKey: key(projectId ?? ""),
@@ -127,26 +141,23 @@ export function useBulkImageActions(project: Project) {
   const addTag = useMutation({
     mutationFn: async (args: {
       ids: string[];
-      tag: string;
+      tags: string[];
       position?: number;
     }) => {
-      snapshot(
-        args.ids,
-        `Added “${args.tag}” to ${args.ids.length} image(s)`,
-      );
-      await imagesDb.addTagMany(args.ids, args.tag, args.position);
+      snapshot(args.ids, tagBatchLabel("Added", args.tags, args.ids.length));
+      await imagesDb.addTagMany(args.ids, args.tags, args.position);
       await rebuildInto(args.ids);
     },
     onSuccess: invalidate,
   });
 
   const removeTag = useMutation({
-    mutationFn: async (args: { ids: string[]; tag: string }) => {
+    mutationFn: async (args: { ids: string[]; tags: string[] }) => {
       snapshot(
         args.ids,
-        `Removed “${args.tag}” from ${args.ids.length} image(s)`,
+        tagBatchLabel("Removed", args.tags, args.ids.length),
       );
-      await imagesDb.removeTagMany(args.ids, args.tag);
+      await imagesDb.removeTagMany(args.ids, args.tags);
       await rebuildInto(args.ids);
     },
     onSuccess: invalidate,

@@ -12,28 +12,30 @@ import {
   Loader2,
   Download,
   Tags,
-  Check,
-  Trash2,
   X,
   Search,
+  Filter,
   MousePointerClick,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { TagComboboxInput } from "@/components/ui/tag-combobox";
 import { ImageCell } from "@/components/gallery/image-cell";
 import { ImageLightbox } from "@/components/gallery/image-lightbox";
+import { BulkActionBar } from "@/components/gallery/bulk-action-bar";
 import { ExportDialog } from "@/components/export/export-dialog";
 import { ReprocessDialog } from "@/components/reprocess/reprocess-dialog";
-import {
-  useImages,
-  useBulkImageActions,
-  useUndo,
-} from "@/hooks/use-images";
+import { useImages, useUndo } from "@/hooks/use-images";
 import { useCostumes } from "@/hooks/use-costumes";
+import { useProjectVocabulary } from "@/hooks/use-project-vocabulary";
 import { useImport } from "@/hooks/use-import";
 import { useUiStore } from "@/stores/use-ui-store";
+import { ciKey } from "@/lib/tag-key";
+import { cn } from "@/lib/utils";
 import type { ImageStatus, Project } from "@/lib/types";
+
+type TagFilter = { tag: string; mode: "has" | "missing" };
 
 const CELL = 172;
 const ROW_H = 200;
@@ -52,9 +54,9 @@ interface GalleryProps {
 export function Gallery({ project }: GalleryProps) {
   const { data: images = [], isLoading } = useImages(project.id);
   const { data: costumes = [] } = useCostumes(project.id);
+  const vocabulary = useProjectVocabulary(project.id);
   const { run, runFiles, running, progress, error, skipped, skippedMsg } =
     useImport();
-  const bulk = useBulkImageActions(project);
   const undo = useUndo(project);
   const [exportOpen, setExportOpen] = useState(false);
   const [reprocessOpen, setReprocessOpen] = useState(false);
@@ -62,15 +64,14 @@ export function Gallery({ project }: GalleryProps) {
   const [reprocessScope, setReprocessScope] = useState<string[] | null>(
     null,
   );
-  const [bulkTag, setBulkTag] = useState("");
-  // Insertion index for bulk "+ Tag" (0-based, from the start). Empty = append.
-  const [bulkPos, setBulkPos] = useState("");
 
   const [statusFilter, setStatusFilter] = useState<"all" | ImageStatus>(
     "all",
   );
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
+  // Facet filter: image must have every "has" tag and no "missing" tag.
+  const [tagFilters, setTagFilters] = useState<TagFilter[]>([]);
   const costumeFilter = useUiStore((s) => s.costumeFilter);
   const setCostumeFilter = useUiStore((s) => s.setCostumeFilter);
   const selectMode = useUiStore((s) => s.selectMode);
@@ -93,6 +94,12 @@ export function Gallery({ project }: GalleryProps) {
 
   const visible = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase();
+    const has = tagFilters
+      .filter((f) => f.mode === "has")
+      .map((f) => ciKey(f.tag));
+    const missing = tagFilters
+      .filter((f) => f.mode === "missing")
+      .map((f) => ciKey(f.tag));
     return images.filter((img) => {
       if (statusFilter !== "all" && img.status !== statusFilter) {
         return false;
@@ -105,6 +112,11 @@ export function Gallery({ project }: GalleryProps) {
       ) {
         return false;
       }
+      if (has.length > 0 || missing.length > 0) {
+        const keys = new Set(img.tagsFinal.map(ciKey));
+        if (!has.every((k) => keys.has(k))) return false;
+        if (missing.some((k) => keys.has(k))) return false;
+      }
       if (q !== "") {
         const hay =
           img.filename.toLowerCase() +
@@ -116,7 +128,7 @@ export function Gallery({ project }: GalleryProps) {
       }
       return true;
     });
-  }, [images, statusFilter, costumeFilter, deferredQuery]);
+  }, [images, statusFilter, costumeFilter, deferredQuery, tagFilters]);
 
   const bulkSet = useMemo(() => new Set(bulkIds), [bulkIds]);
 
@@ -127,6 +139,7 @@ export function Gallery({ project }: GalleryProps) {
     clearBulk();
     setStatusFilter("all");
     setQuery("");
+    setTagFilters([]);
     setSelectMode(false);
   }, [project.id, clearBulk, setSelectMode]);
 
@@ -174,29 +187,32 @@ export function Gallery({ project }: GalleryProps) {
     overscan: 4,
   });
 
-  const selCount = bulkIds.length;
   const allVisibleSelected =
     visible.length > 0 && visible.every((i) => bulkSet.has(i.id));
-  async function bulkDelete() {
-    if (!confirm(`Delete ${selCount} selected image(s)?`)) return;
-    await bulk.remove.mutateAsync(bulkIds);
-    clearBulk();
+
+  function addTagFilter(tag: string) {
+    setTagFilters((prev) =>
+      prev.some((f) => ciKey(f.tag) === ciKey(tag))
+        ? prev
+        : [...prev, { tag, mode: "has" }],
+    );
+  }
+  function toggleTagFilter(tag: string) {
+    setTagFilters((prev) =>
+      prev.map((f) =>
+        f.tag === tag
+          ? { ...f, mode: f.mode === "has" ? "missing" : "has" }
+          : f,
+      ),
+    );
+  }
+  function removeTagFilter(tag: string) {
+    setTagFilters((prev) => prev.filter((f) => f.tag !== tag));
   }
 
-  function applyBulkTag(kind: "add" | "remove") {
-    const t = bulkTag.trim();
-    if (t === "") return;
-    if (kind === "add") {
-      const position =
-        bulkPos.trim() === ""
-          ? undefined
-          : Math.max(0, parseInt(bulkPos, 10) || 0);
-      bulk.addTag.mutate({ ids: bulkIds, tag: t, position });
-    } else {
-      bulk.removeTag.mutate({ ids: bulkIds, tag: t });
-    }
-    setBulkTag("");
-    setBulkPos("");
+  function openRetag(ids: string[]) {
+    setReprocessScope(ids);
+    setReprocessOpen(true);
   }
 
   return (
@@ -290,160 +306,89 @@ export function Gallery({ project }: GalleryProps) {
             </Select>
           )}
 
-          <Button
-            size="xs"
-            variant={selectMode ? "secondary" : "ghost"}
-            onClick={() => {
-              const next = !selectMode;
-              setSelectMode(next);
-              if (!next) clearBulk();
-            }}
-            title="Toggle selection mode — click images to select them"
-          >
-            <MousePointerClick className="size-3" />
-            {selectMode ? "Selecting" : "Select"}
-          </Button>
-
-          <Button
-            size="xs"
-            variant="ghost"
-            onClick={() =>
-              allVisibleSelected
-                ? clearBulk()
-                : setBulk(visible.map((i) => i.id))
-            }
-            disabled={visible.length === 0}
-          >
-            {allVisibleSelected
-              ? "Deselect all"
-              : `Select all (${visible.length})`}
-          </Button>
-
-          {selCount > 0 && (
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <span className="text-[11px] text-muted-foreground">
-                {selCount} selected
-              </span>
-              <Button
-                size="xs"
-                onClick={() =>
-                  bulk.setStatus.mutate({
-                    ids: bulkIds,
-                    status: "validated",
-                  })
-                }
-              >
-                <Check className="size-3" />
-                Validate
-              </Button>
-              <Button
-                size="xs"
-                variant="secondary"
-                onClick={() => {
-                  setReprocessScope(bulkIds);
-                  setReprocessOpen(true);
-                }}
-                title="Run WD Tagger / caption on the selected images only"
-              >
-                <Tags className="size-3" />
-                Tag
-              </Button>
-              <Button
-                size="xs"
-                variant="secondary"
-                onClick={() =>
-                  bulk.setStatus.mutate({ ids: bulkIds, status: "tagged" })
-                }
-              >
-                Mark tagged
-              </Button>
-              <Input
-                value={bulkTag}
-                onChange={(e) => setBulkTag(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") applyBulkTag("add");
-                }}
-                placeholder="tag…"
-                className="h-6 w-28 text-xs"
-              />
-              <Input
-                type="number"
-                min={0}
-                value={bulkPos}
-                onChange={(e) => setBulkPos(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") applyBulkTag("add");
-                }}
-                placeholder="pos"
-                title="Position d'insertion (vide = fin)"
-                className="h-6 w-14 text-xs"
-              />
-              <Button
-                size="xs"
-                variant="secondary"
-                onClick={() => applyBulkTag("add")}
-                disabled={bulkTag.trim() === ""}
-              >
-                + Tag
-              </Button>
-              <Button
-                size="xs"
-                variant="secondary"
-                onClick={() => applyBulkTag("remove")}
-                disabled={bulkTag.trim() === ""}
-              >
-                − Tag
-              </Button>
-              <Button
-                size="xs"
-                variant="secondary"
-                onClick={() => bulk.rebuildCaptions.mutate(bulkIds)}
-                disabled={bulk.rebuildCaptions.isPending}
-                title="Reassemble captions from current tags & costume"
-              >
-                {bulk.rebuildCaptions.isPending ? (
-                  <Loader2 className="size-3 animate-spin" />
-                ) : null}
-                Rebuild captions
-              </Button>
-              {isCharacter && (
-                <Select
-                  value=""
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === "") return;
-                    bulk.setCostume.mutate({
-                      ids: bulkIds,
-                      costumeId: v === "none" ? null : v,
-                    });
-                  }}
-                  className="h-6 w-auto text-xs"
-                >
-                  <option value="">Assign costume…</option>
-                  <option value="none">— none —</option>
-                  {costumes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
+          {/* Tag facet filter */}
+          <div className="flex h-7 items-center rounded-md border border-input bg-input/30 px-2">
+            <Filter className="mr-1 size-3 shrink-0 text-muted-foreground" />
+            <TagComboboxInput
+              suggestions={vocabulary}
+              onCommit={addTagFilter}
+              exclude={tagFilters.map((f) => f.tag)}
+              placeholder="Filter by tag…"
+              className="w-32 text-xs"
+            />
+          </div>
+          {tagFilters.map((f) => (
+            <button
+              key={f.tag}
+              type="button"
+              onClick={() => toggleTagFilter(f.tag)}
+              title={
+                f.mode === "has"
+                  ? "Has this tag — click to invert"
+                  : "Missing this tag — click to invert"
+              }
+              className={cn(
+                "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium",
+                f.mode === "has"
+                  ? "bg-emerald-500/20 text-emerald-400"
+                  : "bg-destructive/20 text-destructive line-through",
               )}
-              <Button
-                size="xs"
-                variant="destructive"
-                onClick={() => void bulkDelete()}
+            >
+              {f.mode === "missing" && <span className="no-underline">−</span>}
+              {f.tag}
+              <span
+                role="button"
+                aria-label={`Remove filter ${f.tag}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeTagFilter(f.tag);
+                }}
+                className="text-current/70 hover:text-current"
               >
-                <Trash2 className="size-3" />
-                Delete
-              </Button>
-              <Button size="xs" variant="ghost" onClick={clearBulk}>
                 <X className="size-3" />
-                Clear
-              </Button>
-            </div>
-          )}
+              </span>
+            </button>
+          ))}
+
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              size="xs"
+              variant={selectMode ? "secondary" : "ghost"}
+              onClick={() => {
+                const next = !selectMode;
+                setSelectMode(next);
+                if (!next) clearBulk();
+              }}
+              title="Toggle selection mode — click images to select them"
+            >
+              <MousePointerClick className="size-3" />
+              {selectMode ? "Selecting" : "Select"}
+            </Button>
+
+            <Button
+              size="xs"
+              variant="ghost"
+              onClick={() =>
+                allVisibleSelected
+                  ? clearBulk()
+                  : setBulk(visible.map((i) => i.id))
+              }
+              disabled={visible.length === 0}
+            >
+              {allVisibleSelected
+                ? "Deselect all"
+                : `Select all (${visible.length})`}
+            </Button>
+          </div>
         </div>
       )}
+
+      <BulkActionBar
+        project={project}
+        costumes={costumes}
+        isCharacter={isCharacter}
+        onRetag={openRetag}
+      />
 
       <ExportDialog
         project={project}
