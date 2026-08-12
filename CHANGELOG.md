@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/oktaze/dataset-organizer/compare/v0.10.0...v0.11.0) (2026-08-12)
+
+
+### Features
+
+* add tag curate action with global blacklist ([5e7ba0c](https://github.com/oktaze/dataset-organizer/commit/5e7ba0c60e3632f1ca2941a8676482b72875618a))
+* add tag curate action with global blacklist ([d10aa67](https://github.com/oktaze/dataset-organizer/commit/d10aa67a360e2be6d43c5a808da4c9af1e427a39))
+
 ## [0.10.0](https://github.com/oktaze/dataset-organizer/compare/v0.9.0...v0.10.0) (2026-08-12)
 
 
