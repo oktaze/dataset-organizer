@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0](https://github.com/oktaze/dataset-organizer/compare/v0.9.0...v0.10.0) (2026-08-12)
+
+
+### Features
+
+* place a bulk tag at a specific position across selected images ([bae34c9](https://github.com/oktaze/dataset-organizer/commit/bae34c902985cd5d1cf27e748c6312bae72bb232))
+* place a bulk tag at a specific position across selected images ([5ca3ed9](https://github.com/oktaze/dataset-organizer/commit/5ca3ed95a7ad8fbaec030622622e1bc0ae27fe41))
+
 ## [0.9.0](https://github.com/oktaze/dataset-organizer/compare/v0.8.0...v0.9.0) (2026-08-12)
 
 
