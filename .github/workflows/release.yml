@@ -11,6 +11,17 @@ on:
   push:
     branches:
       - main
+  # Manual escape hatch: rebuild and (re)upload the per-platform assets onto an
+  # existing release. Needed because the `build` job otherwise only runs when
+  # release-please cuts a release, so a flaky/failed platform build (e.g. the
+  # Linux AppImage) can't be recovered without cutting a new version. Run from
+  # the branch/tag whose code matches the release's version.
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to build & upload assets to (e.g. v0.11.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write # create the release PR, tag, GitHub Release + upload assets
@@ -45,7 +56,7 @@ jobs:
 
   build:
     needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
+    if: needs.release-please.outputs.release_created == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
       fail-fast: false
       matrix:
@@ -61,10 +72,14 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
+          # libfuse2: the AppImage bundler's linuxdeploy step needs FUSE. Newer
+          # ubuntu-22.04 runner images no longer ship it, which makes
+          # linuxdeploy fail ("failed to run linuxdeploy") even with
+          # APPIMAGE_EXTRACT_AND_RUN=1. Install it explicitly.
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev librsvg2-dev patchelf build-essential \
             curl wget file libssl-dev libgtk-3-dev \
-            libayatana-appindicator3-dev
+            libayatana-appindicator3-dev libfuse2
 
       - uses: actions/setup-python@v5
         with:
@@ -118,6 +133,23 @@ jobs:
           fetch linuxdeploy-x86_64.AppImage \
             https://github.com/tauri-apps/binary-releases/releases/download/linuxdeploy/linuxdeploy-x86_64.AppImage
 
+      # The upload target: the release-please-created release on push, or the
+      # tag given to workflow_dispatch when recovering a failed platform build.
+      - name: Resolve target release id
+        id: rel
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            id=$(gh release view "${{ inputs.release_tag }}" \
+              --repo "$GITHUB_REPOSITORY" --json databaseId -q .databaseId)
+          else
+            id="${{ needs.release-please.outputs.release_id }}"
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -127,6 +159,9 @@ jobs:
           # so set the AppImage FUSE workaround here too.
           APPIMAGE_EXTRACT_AND_RUN: "1"
         with:
-          # Upload onto the Release that release-please already created
-          # (its body is the CHANGELOG) instead of creating a new one.
-          releaseId: ${{ needs.release-please.outputs.release_id }}
+          # Upload onto the release resolved above (release-please's on push, or
+          # the dispatched tag) instead of creating a new one.
+          releaseId: ${{ steps.rel.outputs.id }}
+          # --verbose surfaces the bundler's underlying tool output (e.g. the
+          # real linuxdeploy error) instead of a swallowed one-line failure.
+          args: --verbose
