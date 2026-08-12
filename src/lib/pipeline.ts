@@ -149,3 +149,59 @@ export async function processImage(
     status: "tagged",
   };
 }
+
+/** Build a caption from tags already known for an image (e.g. imported from
+ *  a Grabber `.txt`) — no WD Tagger inference. Costume matching scores
+ *  against the supplied tags. `tags` is expected pre-parsed/deduped/filtered
+ *  by the caller. Requires the sidecar to be reachable (caption + match). */
+export async function processImageFromTags(
+  filepath: string,
+  ctx: PipelineCtx,
+  tags: string[],
+): Promise<ImagePatch> {
+  let costumeId: string | null = null;
+  let costumeScore: Record<string, number> = {};
+  let costumeTags: string[] | undefined;
+  let costumeTrigger: string | undefined;
+
+  if (ctx.isCharacter) {
+    if (ctx.matchInput.length > 0) {
+      const m = await sidecar.matchCostume(
+        filepath,
+        ctx.matchInput,
+        ctx.threshold,
+        tags,
+      );
+      costumeScore = m.scores;
+      costumeId = m.best_costume_id;
+      const c = costumeId ? ctx.costumeById.get(costumeId) : undefined;
+      if (c) {
+        const merged = [...c.tags, ...c.colorTags];
+        costumeTags = merged.length > 0 ? merged : undefined;
+        costumeTrigger = c.trigger ?? undefined;
+      }
+    }
+  } else if (ctx.projectTags.length > 0) {
+    // Style/Concept: always-include tags, no costume matching.
+    costumeTags = ctx.projectTags;
+  }
+
+  const { caption } = await sidecar.buildCaption({
+    trigger: ctx.project.trigger,
+    auto_tags: tags,
+    constant_tags: ctx.constants,
+    costume_tags: costumeTags,
+    costume_trigger: costumeTrigger,
+    prepend_tags: ctx.prependTags,
+    append_tags: ctx.appendTags,
+  });
+
+  return {
+    tagsAuto: tags.map((tag) => ({ tag, score: 1 })),
+    tagsFinal: tags,
+    costumeId,
+    costumeScore,
+    caption,
+    status: "tagged",
+  };
+}

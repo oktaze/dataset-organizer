@@ -5,6 +5,8 @@ export interface ImageMeta {
   filepath: string;
   width: number;
   height: number;
+  /** Raw content of the sibling `<name>.txt` (Grabber tags), if present. */
+  tagsText?: string | null;
 }
 
 export interface ImportResult {

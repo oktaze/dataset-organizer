@@ -63,3 +63,12 @@ export interface ProjectTag {
   tag: string;
   sortOrder: number;
 }
+
+/** Base models a project can target. Stored as `Project.baseModel` (the id);
+ *  the column is free-form so adding an entry here needs no DB migration. */
+export const BASE_MODELS = [
+  { id: "illustrious-xl", label: "Illustrious XL" },
+  { id: "anima", label: "Anima" },
+] as const;
+
+export const DEFAULT_BASE_MODEL = "illustrious-xl";

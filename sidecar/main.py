@@ -25,7 +25,7 @@ import costume_matcher
 import hf_upload
 import tagger
 
-app = FastAPI(title="Dataset Organizer Sidecar", version="0.5.0")
+app = FastAPI(title="Dataset Organizer Sidecar", version="0.6.0")
 
 # The Tauri webview (http://localhost:1420 in dev, tauri://localhost in prod)
 # is a different origin than this 127.0.0.1 sidecar. Allow all origins —
@@ -110,6 +110,9 @@ class CostumeMatchRequest(BaseModel):
     image_path: str
     costumes: list[CostumeIn]
     threshold: Optional[float] = None
+    # Pre-supplied tags (e.g. imported captions): match against these
+    # instead of re-running WD Tagger on the image.
+    tags: Optional[list[str]] = None
 
 
 class CostumeMatchResponse(BaseModel):
@@ -135,7 +138,9 @@ class CaptionBuildResponse(BaseModel):
 @app.post("/costume/match", response_model=CostumeMatchResponse)
 def costume_match(req: CostumeMatchRequest) -> CostumeMatchResponse:
     costumes = [c.model_dump() for c in req.costumes]
-    result = costume_matcher.match(req.image_path, costumes, req.threshold)
+    result = costume_matcher.match(
+        req.image_path, costumes, req.threshold, req.tags
+    )
     return CostumeMatchResponse(**result)
 
 

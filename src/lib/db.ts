@@ -225,6 +225,14 @@ export interface NewImage {
   sourcePath: string;
   width: number | null;
   height: number | null;
+  /** Tags known at import time (e.g. from a Grabber `.txt`). Defaults empty. */
+  tagsFinal?: string[];
+  tagsAuto?: TagScore[];
+  caption?: string | null;
+  costumeId?: string | null;
+  costumeScore?: Record<string, number>;
+  /** Defaults to "pending" when no tags are supplied. */
+  status?: ImageStatus;
 }
 
 export interface ImagePatch {
@@ -249,17 +257,17 @@ export const imagesDb = {
     const img: ImageItem = {
       id: input.id,
       projectId: input.projectId,
-      costumeId: null,
+      costumeId: input.costumeId ?? null,
       filename: input.filename,
       filepath: input.filepath,
       sourcePath: input.sourcePath,
       width: input.width,
       height: input.height,
-      tagsAuto: [],
-      tagsFinal: [],
-      caption: null,
-      costumeScore: {},
-      status: "pending",
+      tagsAuto: input.tagsAuto ?? [],
+      tagsFinal: input.tagsFinal ?? [],
+      caption: input.caption ?? null,
+      costumeScore: input.costumeScore ?? {},
+      status: input.status ?? "pending",
       createdAt: now(),
     };
     await tauri.dbExecute(
@@ -271,16 +279,16 @@ export const imagesDb = {
       [
         img.id,
         img.projectId,
-        null,
+        img.costumeId,
         img.filename,
         img.filepath,
         img.sourcePath,
         img.width,
         img.height,
-        "[]",
-        "[]",
-        null,
-        "{}",
+        JSON.stringify(img.tagsAuto),
+        JSON.stringify(img.tagsFinal),
+        img.caption,
+        JSON.stringify(img.costumeScore),
         img.status,
         img.createdAt,
       ],

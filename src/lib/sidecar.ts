@@ -115,11 +115,15 @@ export const sidecar = {
     imagePath: string,
     costumes: CostumeMatchInput[],
     threshold?: number,
+    /** When passed, matching scores against these tags instead of re-tagging
+     *  the image (used for imported Grabber captions). */
+    tags?: string[],
   ) =>
     post<CostumeMatchResult>("/costume/match", {
       image_path: imagePath,
       costumes,
       threshold,
+      tags,
     }),
 
   buildCaption: (input: CaptionBuildInput) =>

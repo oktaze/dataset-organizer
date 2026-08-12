@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { useCreateProject } from "@/hooks/use-projects";
 import { useProjectStore } from "@/stores/use-project-store";
-import type { ProjectType } from "@/lib/types";
+import { BASE_MODELS, DEFAULT_BASE_MODEL, type ProjectType } from "@/lib/types";
 
 interface NewProjectDialogProps {
   open: boolean;
@@ -24,7 +24,7 @@ export function NewProjectDialog({ open, onOpenChange }: NewProjectDialogProps) 
   const [name, setName] = useState("");
   const [type, setType] = useState<ProjectType>("character");
   const [trigger, setTrigger] = useState("");
-  const [baseModel, setBaseModel] = useState("illustrious-xl");
+  const [baseModel, setBaseModel] = useState<string>(DEFAULT_BASE_MODEL);
 
   const createProject = useCreateProject();
   const setActiveProject = useProjectStore((s) => s.setActiveProject);
@@ -38,13 +38,13 @@ export function NewProjectDialog({ open, onOpenChange }: NewProjectDialogProps) 
       name: name.trim(),
       type,
       trigger: trigger.trim(),
-      baseModel: baseModel.trim() || "illustrious-xl",
+      baseModel: baseModel || DEFAULT_BASE_MODEL,
     });
     setActiveProject(project.id);
     setName("");
     setTrigger("");
     setType("character");
-    setBaseModel("illustrious-xl");
+    setBaseModel(DEFAULT_BASE_MODEL);
     onOpenChange(false);
   }
 
@@ -95,12 +95,17 @@ export function NewProjectDialog({ open, onOpenChange }: NewProjectDialogProps) 
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="np-model">Base model</Label>
-            <Input
+            <Select
               id="np-model"
               value={baseModel}
               onChange={(e) => setBaseModel(e.target.value)}
-              placeholder="illustrious-xl"
-            />
+            >
+              {BASE_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </Select>
           </div>
 
           <DialogFooter>

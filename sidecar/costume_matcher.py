@@ -40,9 +40,17 @@ def match(
     image_path: str,
     costumes: list[dict],
     threshold: Optional[float] = None,
+    tags: Optional[list[str]] = None,
 ) -> dict:
-    tags = tagger.tag_image(image_path, threshold)
-    detected = {normalize_tag(item["tag"]) for item in tags}
+    # When tags are supplied (e.g. imported from a Grabber `.txt`), score
+    # against them directly and skip the WD Tagger inference entirely.
+    if tags is not None:
+        detected = {normalize_tag(t) for t in tags}
+    else:
+        detected = {
+            normalize_tag(item["tag"])
+            for item in tagger.tag_image(image_path, threshold)
+        }
 
     scores: dict[str, float] = {}
     for c in costumes:

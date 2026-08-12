@@ -10,6 +10,18 @@ import os from "node:os";
 import path from "node:path";
 
 const isWin = process.platform === "win32";
+const isLinux = process.platform === "linux";
+
+// WebKitGTK on Linux crashes at startup on some setups (NVIDIA drivers,
+// Wayland, VMs, hybrid GPUs) with "Could not create GBM EGL display:
+// EGL_NOT_INITIALIZED. Aborting...". Disabling the DMABUF renderer forces
+// WebKit to a software path that initialises reliably. Only affects the
+// dev/run webview rendering, not the build output. Respect an explicit
+// override if the user already set it.
+const webkitEnv = {};
+if (isLinux && process.env.WEBKIT_DISABLE_DMABUF_RENDERER === undefined) {
+  webkitEnv.WEBKIT_DISABLE_DMABUF_RENDERER = "1";
+}
 
 // Auto-load the updater signing key for local release builds so
 // `pnpm tauri build` doesn't fail at the signing step ("A public key has
@@ -50,6 +62,7 @@ const { status } = spawnSync(bin, process.argv.slice(2), {
   env: {
     ...process.env,
     ...signingEnv,
+    ...webkitEnv,
     APPIMAGE_EXTRACT_AND_RUN: "1",
     PATH: `${venvBin}${pathSep}${process.env.PATH ?? ""}`,
   },

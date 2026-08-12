@@ -13,11 +13,15 @@ use std::path::Path;
 use tauri::Manager;
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ImageMeta {
     pub filename: String,
     pub filepath: String,
     pub width: u32,
     pub height: u32,
+    /// Raw content of the sibling `<name>.txt` (Grabber caption file), if any.
+    /// Parsing into tags is done frontend-side (no business logic in Rust).
+    pub tags_text: Option<String>,
 }
 
 /// Result of an import scan: readable images plus the paths that *looked*
@@ -120,11 +124,15 @@ fn meta_for_file(p: &Path) -> Option<ImageMeta> {
         .and_then(|n| n.to_str())
         .unwrap_or_default()
         .to_string();
+    // Sibling caption file: `cat.png` -> `cat.txt` (same transform as
+    // `write_caption_file`). Missing/unreadable => None, never fatal.
+    let tags_text = std::fs::read_to_string(p.with_extension("txt")).ok();
     Some(ImageMeta {
         filename,
         filepath: p.to_string_lossy().to_string(),
         width,
         height,
+        tags_text,
     })
 }
 
