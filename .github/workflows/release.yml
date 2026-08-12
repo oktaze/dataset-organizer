@@ -95,6 +95,29 @@ jobs:
           "$PY" -m pip install --upgrade pip
           "$PY" -m pip install -r sidecar/requirements.txt -r sidecar/requirements-build.txt
 
+      # Tauri's AppImage bundler fetches AppRun + linuxdeploy from GitHub with
+      # no retry, so a single dropped connection fails the whole Linux build
+      # (`failed to bundle project `io: Peer disconnected``). Pre-seed them
+      # into the tauri cache (~/.cache/tauri) with retries; the bundler reuses
+      # cached copies instead of re-downloading. Linux/AppImage only.
+      - name: Pre-fetch AppImage bundler tooling (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cache="$HOME/.cache/tauri"
+          mkdir -p "$cache"
+          fetch() {
+            echo "Fetching $1"
+            curl -fL --retry 8 --retry-delay 4 --retry-all-errors \
+              --connect-timeout 30 -o "$cache/$1" "$2"
+            chmod +x "$cache/$1"
+          }
+          fetch AppRun-x86_64 \
+            https://github.com/tauri-apps/binary-releases/releases/download/apprun-old/AppRun-x86_64
+          fetch linuxdeploy-x86_64.AppImage \
+            https://github.com/tauri-apps/binary-releases/releases/download/linuxdeploy/linuxdeploy-x86_64.AppImage
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
