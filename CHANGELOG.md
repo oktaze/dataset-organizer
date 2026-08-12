@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0](https://github.com/oktaze/dataset-organizer/compare/v0.7.0...v0.8.0) (2026-08-12)
+
+
+### Features
+
+* rework new-project modal UX (type-first, Concept + Anima defaults) ([ae8a496](https://github.com/oktaze/dataset-organizer/commit/ae8a49610f5c7b99ef762cbf8555fc81b7748f13))
+* rework new-project modal UX with type-first layout ([2cc7009](https://github.com/oktaze/dataset-organizer/commit/2cc70094c40ee108bc1c993e4401b95497facccc))
+
 ## [0.7.0](https://github.com/oktaze/dataset-organizer/compare/v0.6.0...v0.7.0) (2026-08-12)
 
 
