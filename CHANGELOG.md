@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.0](https://github.com/oktaze/dataset-organizer/compare/v0.8.0...v0.9.0) (2026-08-12)
+
+
+### Features
+
+* better bulk UX ([7cb68d5](https://github.com/oktaze/dataset-organizer/commit/7cb68d5646670dbf65b3000dcac534a506951eeb))
+* choisir la position d'insertion des tags en masse et rebuild auto des captions ([40d393b](https://github.com/oktaze/dataset-organizer/commit/40d393be1dd7695409ffef93d5cdf399d1aea776))
+* position d'insertion des tags en masse + rebuild auto des captions ([86b1550](https://github.com/oktaze/dataset-organizer/commit/86b1550b34231d36264ed01ff324c143749e880f))
+
 ## [0.8.0](https://github.com/oktaze/dataset-organizer/compare/v0.7.0...v0.8.0) (2026-08-12)
 
 
