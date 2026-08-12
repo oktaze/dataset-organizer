@@ -63,6 +63,8 @@ export function Gallery({ project }: GalleryProps) {
     null,
   );
   const [bulkTag, setBulkTag] = useState("");
+  // Insertion index for bulk "+ Tag" (0-based, from the start). Empty = append.
+  const [bulkPos, setBulkPos] = useState("");
 
   const [statusFilter, setStatusFilter] = useState<"all" | ImageStatus>(
     "all",
@@ -184,9 +186,17 @@ export function Gallery({ project }: GalleryProps) {
   function applyBulkTag(kind: "add" | "remove") {
     const t = bulkTag.trim();
     if (t === "") return;
-    if (kind === "add") bulk.addTag.mutate({ ids: bulkIds, tag: t });
-    else bulk.removeTag.mutate({ ids: bulkIds, tag: t });
+    if (kind === "add") {
+      const position =
+        bulkPos.trim() === ""
+          ? undefined
+          : Math.max(0, parseInt(bulkPos, 10) || 0);
+      bulk.addTag.mutate({ ids: bulkIds, tag: t, position });
+    } else {
+      bulk.removeTag.mutate({ ids: bulkIds, tag: t });
+    }
     setBulkTag("");
+    setBulkPos("");
   }
 
   return (
@@ -355,6 +365,18 @@ export function Gallery({ project }: GalleryProps) {
                 }}
                 placeholder="tag…"
                 className="h-6 w-28 text-xs"
+              />
+              <Input
+                type="number"
+                min={0}
+                value={bulkPos}
+                onChange={(e) => setBulkPos(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") applyBulkTag("add");
+                }}
+                placeholder="pos"
+                title="Position d'insertion (vide = fin)"
+                className="h-6 w-14 text-xs"
               />
               <Button
                 size="xs"

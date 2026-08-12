@@ -253,6 +253,18 @@ export const imagesDb = {
     return rows.map(toImage);
   },
 
+  /** Fetch the given images straight from the DB (freshest state, bypassing
+   *  any query cache). Order is not guaranteed. */
+  async getMany(ids: string[]): Promise<ImageItem[]> {
+    if (ids.length === 0) return [];
+    const ph = ids.map(() => "?").join(", ");
+    const rows = await tauri.dbQuery<Row>(
+      `SELECT * FROM images WHERE id IN (${ph})`,
+      ids,
+    );
+    return rows.map(toImage);
+  },
+
   async insert(input: NewImage): Promise<ImageItem> {
     const img: ImageItem = {
       id: input.id,
@@ -342,8 +354,17 @@ export const imagesDb = {
 
   /** Add `tag` to `tags_final` of every listed image (case-insensitive
    *  de-dup). Read-modify-write per row since `tags_final` is JSON-as-TEXT —
-   *  business logic stays in the frontend (per CLAUDE.md). */
-  async addTagMany(ids: string[], tag: string): Promise<void> {
+   *  business logic stays in the frontend (per CLAUDE.md).
+   *
+   *  `position` chooses the 0-based insertion index (from the start). Any
+   *  existing occurrence is removed first, so the requested position is always
+   *  honoured even when the tag was already present elsewhere. `undefined`
+   *  (or an index past the end) appends. */
+  async addTagMany(
+    ids: string[],
+    tag: string,
+    position?: number,
+  ): Promise<void> {
     const t = tag.trim();
     if (ids.length === 0 || t === "") return;
     const ph = ids.map(() => "?").join(", ");
@@ -354,10 +375,21 @@ export const imagesDb = {
     const k = ciKey(t);
     for (const r of rows) {
       const cur = parseJson<string[]>(r.tags_final, []);
-      if (cur.some((x) => ciKey(x) === k)) continue;
+      const next = cur.filter((x) => ciKey(x) !== k);
+      const pos =
+        position == null
+          ? next.length
+          : Math.max(0, Math.min(position, next.length));
+      next.splice(pos, 0, t);
+      if (
+        next.length === cur.length &&
+        next.every((x, i) => x === cur[i])
+      ) {
+        continue;
+      }
       await tauri.dbExecute(
         "UPDATE images SET tags_final = ? WHERE id = ?",
-        [JSON.stringify([...cur, t]), str(r.id)],
+        [JSON.stringify(next), str(r.id)],
       );
     }
   },

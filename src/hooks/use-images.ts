@@ -79,69 +79,83 @@ export function useBulkImageActions(project: Project) {
     onSuccess: invalidate,
   });
 
+  // Re-assemble captions from the given images' current tags + costume (no WD
+  // Tagger run — that's the "Tag images" reprocess flow). Mirrors the
+  // single-image rebuild in the tag editor. Reads the freshest tags_final
+  // straight from the DB so it stays correct right after a tag add/remove.
+  const rebuildInto = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    const targets = await imagesDb.getMany(ids);
+    const ctx = await makePipelineCtx(project);
+    const limit = pLimit(4);
+    await Promise.all(
+      targets.map((img) =>
+        limit(async () => {
+          let costumeTags: string[] | undefined;
+          let costumeTrigger: string | undefined;
+          if (ctx.isCharacter) {
+            const c = img.costumeId
+              ? ctx.costumeById.get(img.costumeId)
+              : undefined;
+            if (c) {
+              const merged = [...c.tags, ...c.colorTags];
+              costumeTags = merged.length > 0 ? merged : undefined;
+              costumeTrigger = c.trigger ?? undefined;
+            }
+          } else if (ctx.projectTags.length > 0) {
+            costumeTags = ctx.projectTags;
+          }
+          const { caption } = await sidecar.buildCaption({
+            trigger: ctx.project.trigger,
+            auto_tags: img.tagsFinal,
+            constant_tags: ctx.constants,
+            costume_tags: costumeTags,
+            costume_trigger: costumeTrigger,
+            prepend_tags: ctx.prependTags,
+            append_tags: ctx.appendTags,
+          });
+          await imagesDb.update(img.id, { caption });
+        }),
+      ),
+    );
+  };
+
+  // Adding/removing a tag in bulk rewrites tags_final, which would leave the
+  // captions stale — so we rebuild them in the same mutation. The single
+  // snapshot taken up front captures both tags_final and caption, so Undo
+  // restores the pre-edit state in one step.
   const addTag = useMutation({
-    mutationFn: (args: { ids: string[]; tag: string }) => {
+    mutationFn: async (args: {
+      ids: string[];
+      tag: string;
+      position?: number;
+    }) => {
       snapshot(
         args.ids,
         `Added “${args.tag}” to ${args.ids.length} image(s)`,
       );
-      return imagesDb.addTagMany(args.ids, args.tag);
+      await imagesDb.addTagMany(args.ids, args.tag, args.position);
+      await rebuildInto(args.ids);
     },
     onSuccess: invalidate,
   });
 
   const removeTag = useMutation({
-    mutationFn: (args: { ids: string[]; tag: string }) => {
+    mutationFn: async (args: { ids: string[]; tag: string }) => {
       snapshot(
         args.ids,
         `Removed “${args.tag}” from ${args.ids.length} image(s)`,
       );
-      return imagesDb.removeTagMany(args.ids, args.tag);
+      await imagesDb.removeTagMany(args.ids, args.tag);
+      await rebuildInto(args.ids);
     },
     onSuccess: invalidate,
   });
 
-  // Re-assemble captions from each image's current tags + costume (no WD
-  // Tagger run — that's the "Tag images" reprocess flow). Mirrors the
-  // single-image rebuild in the tag editor.
   const rebuildCaptions = useMutation({
     mutationFn: async (ids: string[]) => {
       snapshot(ids, `Rebuilt captions for ${ids.length} image(s)`);
-      const all = qc.getQueryData<ImageItem[]>(key(projectId)) ?? [];
-      const sel = new Set(ids);
-      const targets = all.filter((i) => sel.has(i.id));
-      const ctx = await makePipelineCtx(project);
-      const limit = pLimit(4);
-      await Promise.all(
-        targets.map((img) =>
-          limit(async () => {
-            let costumeTags: string[] | undefined;
-            let costumeTrigger: string | undefined;
-            if (ctx.isCharacter) {
-              const c = img.costumeId
-                ? ctx.costumeById.get(img.costumeId)
-                : undefined;
-              if (c) {
-                const merged = [...c.tags, ...c.colorTags];
-                costumeTags = merged.length > 0 ? merged : undefined;
-                costumeTrigger = c.trigger ?? undefined;
-              }
-            } else if (ctx.projectTags.length > 0) {
-              costumeTags = ctx.projectTags;
-            }
-            const { caption } = await sidecar.buildCaption({
-              trigger: ctx.project.trigger,
-              auto_tags: img.tagsFinal,
-              constant_tags: ctx.constants,
-              costume_tags: costumeTags,
-              costume_trigger: costumeTrigger,
-              prepend_tags: ctx.prependTags,
-              append_tags: ctx.appendTags,
-            });
-            await imagesDb.update(img.id, { caption });
-          }),
-        ),
-      );
+      await rebuildInto(ids);
     },
     onSuccess: invalidate,
   });
