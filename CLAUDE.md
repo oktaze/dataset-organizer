@@ -278,8 +278,10 @@ WD_THRESHOLD=0.35               # seuil de confiance minimum
 - Endpoint : `plugins.updater.endpoints` → `https://github.com/oktaze/dataset-organizer/releases/latest/download/latest.json`. `bundle.createUpdaterArtifacts: true` ⇒ **chaque `pnpm tauri build` doit être signé**.
 - Clé minisign **hors repo** : `~/.tauri/dataset-organizer-updater.key` (sans mot de passe). Pubkey committée dans `tauri.conf.json`. Secret CI : `TAURI_SIGNING_PRIVATE_KEY`. **Perte de la clé = plus aucun client ne peut s'updater.**
 - `scripts/tauri.mjs` auto-charge cette clé si `TAURI_SIGNING_PRIVATE_KEY` n'est pas déjà posée ⇒ `pnpm tauri build` signe sans manip.
-- CI : `.github/workflows/release.yml`, déclenchée sur tag `v*`. Matrice Linux / Windows / macOS arm64. `tauri-action` build, signe, publie la Release + `latest.json`.
-- Flux release : bump `version` dans `src-tauri/tauri.conf.json` **+** `package.json` **+** `src-tauri/Cargo.toml` → `git tag vX.Y.Z` → push tags. L'updater compare à `latest.json` ⇒ **toujours bumper**.
+- CI : `.github/workflows/release.yml`, déclenchée sur **push `main`**. Deux jobs : `release-please` (gère version + changelog + Release PR), puis `build` (gated sur `release_created`, matrice Linux / Windows / macOS arm64). `tauri-action` build, signe et uploade les installers + `latest.json` sur la Release créée par release-please (`releaseId`).
+- **Flux release (release-please)** : on ne bumpe **plus jamais** la version à la main. Écrire des commits **Conventional** (`feat:` → minor, `fix:` → patch, `feat!:` ou `BREAKING CHANGE:` → major). À chaque push sur `main`, release-please maintient une **Release PR** (« chore(main): release X.Y.Z ») qui remplit `CHANGELOG.md` et bumpe **les 3 fichiers ensemble** (`package.json` + `src-tauri/tauri.conf.json` + `src-tauri/Cargo.toml`) via `release-please-config.json` + `.release-please-manifest.json`. **Merger cette PR** = tag `vX.Y.Z` + Release + build. L'updater compare à `latest.json` (endpoint inchangé).
+  - Sync des versions : `package.json` = package (release-type `node`) ; `tauri.conf.json` via `extra-files` (jsonpath `$.version`) ; `Cargo.toml` via l'updater `generic` (annotation `# x-release-please-version` sur la ligne `version`, **ne pas retirer**). `Cargo.lock` non géré (régénéré au build, pas de `--locked`).
+  - Prérequis GitHub : Settings → Actions → General → **Allow GitHub Actions to create and approve pull requests** activé, sinon la Release PR ne peut pas s'ouvrir.
 - Première release = install **manuelle** (l'updater n'agit que depuis une version qui l'embarque déjà). Linux : seul l'**AppImage** s'auto-update. macOS non signé : 1re install clic-droit → Ouvrir.
 
 ---
@@ -299,6 +301,7 @@ WD_THRESHOLD=0.35               # seuil de confiance minimum
 
 - **Ne pas commiter ni pusher** sans demande explicite : faire les modifs, laisser l'utilisateur commiter.
 - **Aucun trailer `Co-Authored-By`** dans les messages de commit.
+- **Commits Conventional** (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`, `feat!:`/`BREAKING CHANGE:`) : release-please en dérive le `CHANGELOG.md` et le bump de version. Ne plus committer de « feat: 0.x.0 » (release-please est la seule source de bump).
 
 ---
 
@@ -329,3 +332,4 @@ WD_THRESHOLD=0.35               # seuil de confiance minimum
 - [ ] Raccourcis clavier
 - [ ] Vision LLM pour enrichissement (idée future, à repenser — l'ancienne implémentation Claude Vision « matching costume » a été retirée car peu de plus-value)
 - [x] Auto-update (`tauri-plugin-updater`) + release CI GitHub Actions
+- [x] Versioning + changelog automatisés (release-please, Release PR, bump des 3 fichiers)

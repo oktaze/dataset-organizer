@@ -1,18 +1,51 @@
 name: release
 
-# Push a version tag (e.g. v0.1.1) to build, sign, and publish a GitHub
-# Release with per-platform installers + the updater artifacts and
-# latest.json that `tauri-plugin-updater` polls. Bump `version` in
-# tauri.conf.json + package.json + Cargo.toml before tagging.
+# Push to `main` runs release-please: it maintains a "release PR" that
+# accumulates the CHANGELOG and bumps the version in package.json +
+# tauri.conf.json + Cargo.toml together. Merging that PR creates the
+# `vX.Y.Z` tag + GitHub Release, which then triggers the `build` job below
+# to build/sign the per-platform installers, the updater artifacts and the
+# latest.json that `tauri-plugin-updater` polls. No manual version bump or
+# tagging — write Conventional Commits (feat:/fix:/feat!:) and merge the PR.
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+
+permissions:
+  contents: write # create the release PR, tag, GitHub Release + upload assets
+  pull-requests: write # open/update the release PR
 
 jobs:
-  release:
-    permissions:
-      contents: write # create the GitHub Release + upload assets
+  release-please:
+    runs-on: ubuntu-22.04
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      release_id: ${{ steps.release.outputs.id }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # release-please's release body is the changelog; append the standing
+      # install/updater note underneath it (once, when a release is cut).
+      - name: Append updater note to the release
+        if: ${{ steps.release.outputs.release_created == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+        run: |
+          NOTE=$'\n\n---\n\n> Auto-update enabled. Each update re-downloads the full app bundle (incl. the ~63 MB Python sidecar); the WD Tagger model is unaffected. macOS builds are unsigned — on first manual install, right-click → Open.'
+          BODY=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json body -q .body)
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes "${BODY}${NOTE}"
+
+  build:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -71,8 +104,6 @@ jobs:
           # so set the AppImage FUSE workaround here too.
           APPIMAGE_EXTRACT_AND_RUN: "1"
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "dataset-organizer ${{ github.ref_name }}"
-          releaseBody: "Auto-update enabled. Each update re-downloads the full app bundle (incl. the ~63 MB Python sidecar); the WD Tagger model is unaffected. macOS builds are unsigned — on first manual install, right-click → Open."
-          releaseDraft: false
-          prerelease: false
+          # Upload onto the Release that release-please already created
+          # (its body is the CHANGELOG) instead of creating a new one.
+          releaseId: ${{ needs.release-please.outputs.release_id }}
