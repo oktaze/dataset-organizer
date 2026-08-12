@@ -71,4 +71,4 @@ export const BASE_MODELS = [
   { id: "anima", label: "Anima" },
 ] as const;
 
-export const DEFAULT_BASE_MODEL = "illustrious-xl";
+export const DEFAULT_BASE_MODEL = "anima";
