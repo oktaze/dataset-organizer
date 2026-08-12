@@ -9,7 +9,7 @@ import { useUiStore } from "@/stores/use-ui-store";
 import { cn } from "@/lib/utils";
 import type { Costume, Project } from "@/lib/types";
 
-type InsertPos = "end" | "start";
+type InsertPos = "end" | "start" | "at";
 
 interface BulkActionBarProps {
   project: Project;
@@ -41,17 +41,26 @@ export function BulkActionBar({
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerTags, setComposerTags] = useState<string[]>([]);
   const [pos, setPos] = useState<InsertPos>("end");
+  // 1-based position for the "At #" mode (empty string while typing).
+  const [atIndex, setAtIndex] = useState("1");
 
   const count = bulkIds.length;
   if (count === 0) return null;
 
   function addTags() {
     if (composerTags.length === 0) return;
-    bulk.addTag.mutate({
-      ids: bulkIds,
-      tags: composerTags,
-      position: pos === "start" ? 0 : undefined,
-    });
+    // `addTagMany` removes any existing occurrence first, then splices the tags
+    // in at this 0-based index — so a common tag is *moved* to the position on
+    // images that already have it and *inserted* on those that don't. An index
+    // past the end clamps to the end (that's what `end` / an oversized "At #"
+    // both resolve to server-side).
+    let position: number | undefined;
+    if (pos === "start") position = 0;
+    else if (pos === "at") {
+      const n = Number.parseInt(atIndex, 10);
+      position = Math.max(0, (Number.isFinite(n) ? n : 1) - 1);
+    }
+    bulk.addTag.mutate({ ids: bulkIds, tags: composerTags, position });
     setComposerTags([]);
   }
 
@@ -199,7 +208,31 @@ export function BulkActionBar({
               >
                 Start
               </button>
+              <button
+                type="button"
+                onClick={() => setPos("at")}
+                title="Insert at a specific 1-based position (moves the tag there on images that already have it)"
+                className={cn(
+                  "border-l border-border px-2 py-0.5 text-[11px] font-medium transition-colors",
+                  pos === "at"
+                    ? "bg-primary/15 text-primary"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                At #
+              </button>
             </div>
+            {pos === "at" && (
+              <input
+                type="number"
+                min={1}
+                value={atIndex}
+                onChange={(e) => setAtIndex(e.target.value)}
+                aria-label="Position (1-based)"
+                title="1 = first tag. A value past the end places it last."
+                className="h-6 w-14 rounded-md border border-input bg-input/30 px-1.5 text-center text-[11px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40"
+              />
+            )}
           </div>
 
           <Button
